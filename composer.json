@@ -1,0 +1,18 @@
+{
+    "name": "realtytrust/rentvine",
+    "description": "Integration between realtytrust and rentvine",
+    "type": "project",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Rentvine\\": "src/Rentvine"
+        }
+    },
+    "authors": [
+        {
+            "name": "Carlos Dias",
+            "email": "112416334+carlosedias@users.noreply.github.com"
+        }
+    ],
+    "require": {}
+}
