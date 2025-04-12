@@ -32,6 +32,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // Define routes
 $routes = [
     'GET' => [
+        '/status' => function () use ($rentvine) {
+            echo 'Routes working!';
+        },
         '/owners' => function () use ($rentvine) {
             echo $rentvine->getOwners();
         },
