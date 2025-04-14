@@ -1,0 +1,13 @@
+services:
+  php:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: php-server
+    ports:
+      - "5677:80"
+    volumes:
+      - ./:/var/www/html
+    working_dir: /var/www/html
+    command: /bin/sh -c "composer install && apache2-foreground"
+    restart: always
