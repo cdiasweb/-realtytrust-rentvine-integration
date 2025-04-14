@@ -1,1 +1,5 @@
 /vendor/
+/src/vendor
+.idea/*
+.idea
+/src/composer.lock
