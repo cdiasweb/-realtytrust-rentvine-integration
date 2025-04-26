@@ -202,8 +202,8 @@ class RentvineAPI
     {
         $webhookEventInfo = 'Webhook Received: ' . json_encode($data);
         Logger::warning($webhookEventInfo);
-        $this->forwardWebhookToMake($data, self::MAKE_URL);
-        $this->forwardWebhookToMake($data, self::NGROK_URL);
+        $this->forwardWebhookEvent($data, self::MAKE_URL);
+        $this->forwardWebhookEvent($data, self::NGROK_URL);
 
         return $webhookEventInfo;
     }
