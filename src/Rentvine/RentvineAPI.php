@@ -14,7 +14,7 @@ class RentvineAPI
     const RENTVINE_ID = 'Rentvine ID';
     const MAKE_WH_SIGNATURE = "YYLKFymLrrkfMyw3R-WCaphN9vZwN2z9PZb";
     const MAKE_URL = "https://hook.us1.make.com/tf4abmmirj1lo8crrhjn3nazh84wn3gi";
-    const NGROK_URL = "https://egret-glorious-cow.ngrok-free.app";
+    const NGROK_URL = "https://egret-glorious-cow.ngrok-free.app/hook";
 
     public function __construct($userName, $password, $baseUrl = 'https://realtytrustservicesllc.rentvine.com/api')
     {
