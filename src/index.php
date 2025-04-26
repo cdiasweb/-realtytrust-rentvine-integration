@@ -47,6 +47,12 @@ $routes = [
         }
     ],
     'POST' => [
+        '/hook' => function () use ($rentvine) {
+            $data = getJsonBody();
+            $rentvine->handleWebhook($data);
+            header("HTTP/1.1 200 OK");
+            exit(0);
+        },
         '/add-billing' => function () use ($rentvine) {
             $data = getJsonBody();
             echo $rentvine->createOwnerPortfolioBill($data);

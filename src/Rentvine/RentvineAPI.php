@@ -10,6 +10,12 @@ class RentvineAPI
     private $userName;
     private $password;
 
+    const OWNER_BILLS_FIELD = 'Owner Bills';
+    const RENTVINE_ID = 'Rentvine ID';
+    const MAKE_WH_SIGNATURE = "YYLKFymLrrkfMyw3R-WCaphN9vZwN2z9PZb";
+    const MAKE_URL = "https://hook.us1.make.com/tf4abmmirj1lo8crrhjn3nazh84wn3gi";
+    const NGROK_URL = "https://egret-glorious-cow.ngrok-free.app";
+
     public function __construct($userName, $password, $baseUrl = 'https://realtytrustservicesllc.rentvine.com/api')
     {
         $this->userName = $userName;
@@ -17,11 +23,11 @@ class RentvineAPI
         $this->baseUrl = rtrim($baseUrl, '/');
     }
 
-    private function makeRequest($endpoint, $method = 'GET', $data = [])
+    private function makeRequest($endpoint, $method = 'GET', $data = [], $headers = null)
     {
         $url = $this->baseUrl . $endpoint;
         $authorizationString = "{$this->userName}:{$this->password}";
-        $headers = [
+        $httpHeaders = $headers ?? [
             'Authorization: Basic ' . base64_encode($authorizationString),
             'Content-Type: application/json'
         ];
@@ -29,7 +35,7 @@ class RentvineAPI
         curl_setopt($curl, CURLOPT_URL, $url);
         curl_setopt($curl, CURLOPT_CUSTOMREQUEST, $method);
         curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($curl, CURLOPT_HTTPHEADER, $httpHeaders);
 
         if (!empty($data)) {
             curl_setopt($curl, CURLOPT_POSTFIELDS, json_encode($data));
@@ -190,5 +196,39 @@ class RentvineAPI
     {
         $endpoint = "/manager/files/attachments/$fileAttachmentID";
         return $this->makeRequest($endpoint, 'DELETE');
+    }
+
+    public function handleWebhook($data)
+    {
+        $webhookEventInfo = 'Webhook Received: ' . json_encode($data);
+        Logger::warning($webhookEventInfo);
+        $this->forwardWebhookToMake($data, self::MAKE_URL);
+        $this->forwardWebhookToMake($data, self::NGROK_URL);
+
+        return $webhookEventInfo;
+    }
+
+    public function forwardWebhookEvent($data, $whUrl = self::MAKE_URL)
+    {
+        $ch = curl_init($whUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'X-Signature: ' . self::MAKE_WH_SIGNATURE
+        ]);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+
+        // 3. Execute cURL request
+        $forwardResponse = curl_exec($ch);
+
+        if (curl_errno($ch)) {
+            //Logger::warning('cURL error: ' . curl_error($ch));
+        } else {
+            //Logger::warning('Webhook forwarded successfully. Response: ' . $forwardResponse);
+        }
+
+        curl_close($ch);
+        //Logger::warning("Forward to Make response: $forwardResponse");
     }
 }
