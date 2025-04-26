@@ -51,6 +51,7 @@ $routes = [
             $data = getJsonBody();
             $rentvine->handleWebhook($data);
             header("HTTP/1.1 200 OK");
+            echo 'Accepted';
             exit(0);
         },
         '/add-billing' => function () use ($rentvine) {
