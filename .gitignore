@@ -3,3 +3,4 @@
 .idea/*
 .idea
 /src/composer.lock
+api.log
