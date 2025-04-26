@@ -208,8 +208,11 @@ class RentvineAPI
         return $webhookEventInfo;
     }
 
-    public function forwardWebhookEvent($data, $whUrl = self::MAKE_URL)
+    public function forwardWebhookEvent($data, $whUrl = null)
     {
+        if (!$whUrl) {
+            return;
+        }
         $ch = curl_init($whUrl);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_POST, true);
