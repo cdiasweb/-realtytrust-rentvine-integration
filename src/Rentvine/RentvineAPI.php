@@ -3,6 +3,7 @@
 namespace Rentvine;
 use CURLFile;
 use Exception;
+use Util\Env;
 
 class RentvineAPI
 {
@@ -203,7 +204,12 @@ class RentvineAPI
         $webhookEventInfo = 'Webhook Received: ' . json_encode($data);
         Logger::warning($webhookEventInfo);
         $this->forwardWebhookEvent($data, self::MAKE_URL);
-        $this->forwardWebhookEvent($data, self::NGROK_URL);
+
+        if (Env::isProd()) {
+            $this->forwardWebhookEvent($data, self::NGROK_URL);
+        } else {
+            Logger::warning('Dev env: Do not forward webhook to ngrok.');
+        }
 
         return $webhookEventInfo;
     }

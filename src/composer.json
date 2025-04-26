@@ -5,7 +5,8 @@
     "license": "MIT",
     "autoload": {
         "psr-4": {
-            "Rentvine\\": "Rentvine"
+            "Rentvine\\": "Rentvine",
+            "Util\\": "Util"
         }
     },
     "authors": [
@@ -14,5 +15,7 @@
             "email": "112416334+carlosedias@users.noreply.github.com"
         }
     ],
-    "require": {}
+    "require": {
+        "vlucas/phpdotenv": "^5.6"
+    }
 }
