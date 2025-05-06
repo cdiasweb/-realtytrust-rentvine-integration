@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   php:
     build:
@@ -10,4 +12,13 @@ services:
       - ./:/var/www/html
     working_dir: /var/www/html
     command: /bin/sh -c "composer install && apache2-foreground"
+    restart: always
+
+  redis:
+    image: redis:7
+    container_name: redis-server
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./redis-data:/data
     restart: always

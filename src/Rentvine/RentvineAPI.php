@@ -1,8 +1,10 @@
 <?php
 
 namespace Rentvine;
+use Aptly\AptlyAPI;
 use CURLFile;
 use Exception;
+use RedisCache\RedisClient;
 use Util\Env;
 
 class RentvineAPI
@@ -11,8 +13,10 @@ class RentvineAPI
     private $userName;
     private $password;
 
-    const OWNER_BILLS_FIELD = 'Owner Bills';
-    const RENTVINE_ID = 'Rentvine ID';
+    public const OWNER_BILLS_FIELD = 'Owner Bills';
+    public const RENTVINE_ID = 'Rentvine ID';
+    public const RENTVINE_DOC_UPLOAD_FIELD = 'Rentvine Building documents';
+
     const MAKE_WH_SIGNATURE = "YYLKFymLrrkfMyw3R-WCaphN9vZwN2z9PZb";
     const MAKE_URL = "https://hook.us1.make.com/tf4abmmirj1lo8crrhjn3nazh84wn3gi";
     const NGROK_URL = "https://egret-glorious-cow.ngrok-free.app/hook";
@@ -190,6 +194,7 @@ class RentvineAPI
     public function addAttachmentToObject($objectId, $objectTypeId, $files)
     {
         $endpoint = "/manager/files?objectTypeID=$objectTypeId&objectID=$objectId";
+        Logger::warning('addAttachmentToObject: ' . $endpoint);
         return $this->makeFilePostRequest($endpoint, $files);
     }
 
@@ -203,6 +208,11 @@ class RentvineAPI
     {
         $webhookEventInfo = 'Webhook Received: ' . json_encode($data);
         Logger::warning($webhookEventInfo);
+
+        // Handle event
+        $this->handleBuildingAttachment($data);
+
+        // Forward events
         $this->forwardWebhookEvent($data, self::MAKE_URL);
 
         if (Env::isProd()) {
@@ -239,5 +249,63 @@ class RentvineAPI
 
         curl_close($ch);
         //Logger::warning("Forward to Make response: $forwardResponse");
+    }
+
+    public function handleBuildingAttachment($event) {
+        Logger::warning('Handle Building attachment: ' . json_encode($event));
+        $eventObject = (object) $event;
+        Logger::warning('Object event: ' . $eventObject->action ?? $eventObject->action ?? '');
+
+        $aptly = new AptlyAPI();
+        if ($eventObject->action === 'update') {
+            $fieldId = $aptly->getFieldIdFromAptlyEventWithKeyName($eventObject, AptlyAPI::buildingEventKey);
+            Logger::warning('FIELD ID: ' . $fieldId);
+            $buildingRentvineCardId = $aptly->getBuildingCardIdFromAptlyEventByFieldId($eventObject, $fieldId);
+            Logger::warning('BUILDING RENTVINE CARD ID: ' . $buildingRentvineCardId);
+            if ($buildingRentvineCardId) {
+                $buildingRentvineId = $aptly->getBuildingRentvineIdFromCard($buildingRentvineCardId);
+                Logger::warning('BUILDING RENTVINE ID: ' . $buildingRentvineId);
+
+                $propertyDetails = $this->getProperty($buildingRentvineId);
+                Logger::warning('PROPERTY DETAILS: ' . $propertyDetails);
+
+                $attachmentsFieldId = $aptly->getFieldIdFromAptlyEventWithKeyName($eventObject, self::RENTVINE_DOC_UPLOAD_FIELD);
+                Logger::warning('Attachments FIELD ID: ' . $attachmentsFieldId);
+
+                $drivePdfFileLink = $aptly->getCompleteFieldDataByFieldIdFromData($eventObject, AptlyAPI::URL_TO_PDF_FIELD);
+                Logger::warning('$drivePdfFileLink' . json_encode($drivePdfFileLink));
+
+                $attachToBuildingAction = $aptly->getCompleteFieldDataByFieldIdFromChanges($eventObject, AptlyAPI::ATTACH_RV_PROPERTY_FIELD);
+                Logger::warning('$attachToBuildingAction: ' . $attachToBuildingAction);
+                if ($attachToBuildingAction !== AptlyAPI::ATTACH_TO_PROPERTY_VALUE) {
+                    Logger::warning('Do not attach file to property.');
+                    return;
+                }
+
+                $googleDriveFileId = $aptly->extractGoogleDriveFileId($drivePdfFileLink);
+                if (!$googleDriveFileId) {
+                    Logger::warning("Could not find the File ID for this URL: $drivePdfFileLink");
+                    return;
+                }
+                $tempPath = sys_get_temp_dir() . '/' . uniqid('gdrive_') . '.pdf';
+                $aptly->downloadPublicGoogleDriveFile("https://drive.usercontent.google.com/uc?id=$googleDriveFileId&export=download", $tempPath);
+
+                // Step 2: Mock the $_FILES array
+                $_FILES['file'] = [
+                    'name' => basename($tempPath),
+                    'type' => mime_content_type($tempPath),
+                    'tmp_name' => $tempPath,
+                    'error' => 0,
+                    'size' => filesize($tempPath)
+                ];
+
+                $fileUploadedData = $this->addAttachmentToObject($buildingRentvineId, 6, $_FILES);
+                Logger::warning('$fileUploadedData: ' . $fileUploadedData);
+
+                // Set the result to card
+                $updateFeedbackResult = $aptly->setFileUploadResult($eventObject->data['_id'] ?? null);
+                Logger::warning('$updateFeedbackResult: ' . $updateFeedbackResult);
+            }
+        }
     }
 }
