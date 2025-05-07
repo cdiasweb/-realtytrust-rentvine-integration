@@ -4,7 +4,6 @@ namespace Rentvine;
 use Aptly\AptlyAPI;
 use CURLFile;
 use Exception;
-use RedisCache\RedisClient;
 use Util\Env;
 
 class RentvineAPI
@@ -191,6 +190,12 @@ class RentvineAPI
         return $this->makeRequest($endpoint);
     }
 
+    public function searchUnitsByPropertyId($propertyId): string
+    {
+        $endpoint = "/manager/properties/$propertyId/units";
+        return $this->makeRequest($endpoint);
+    }
+
     public function addAttachmentToObject($objectId, $objectTypeId, $files)
     {
         $endpoint = "/manager/files?objectTypeID=$objectTypeId&objectID=$objectId";
@@ -283,6 +288,7 @@ class RentvineAPI
                 }
 
                 $googleDriveFileId = $aptly->extractGoogleDriveFileId($drivePdfFileLink);
+                Logger::warning('$googleDriveFileId: ' . $googleDriveFileId);
                 if (!$googleDriveFileId) {
                     Logger::warning("Could not find the File ID for this URL: $drivePdfFileLink");
                     return;
@@ -299,7 +305,19 @@ class RentvineAPI
                     'size' => filesize($tempPath)
                 ];
 
-                $fileUploadedData = $this->addAttachmentToObject($buildingRentvineId, 6, $_FILES);
+                $objectTypeId = 6;
+                // Check if we have units
+                $units = $this->searchUnitsByPropertyId($buildingRentvineId);
+                Logger::warning("units found: $units");
+                $units = json_decode($units, true);
+                if (count($units) === 1) {
+                    $buildingRentvineId = $units[0]['unit']['unitID'] ?? $buildingRentvineId;
+                    $objectTypeId = $units[0]['unit']['unitID'] ? 7 : 6;
+                    Logger::warning('$buildingRentvineId UNITS: ' . $buildingRentvineId);
+                }
+
+
+                $fileUploadedData = $this->addAttachmentToObject($buildingRentvineId, $objectTypeId, $_FILES);
                 Logger::warning('$fileUploadedData: ' . $fileUploadedData);
 
                 // Set the result to card
