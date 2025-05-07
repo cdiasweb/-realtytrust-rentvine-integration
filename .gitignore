@@ -4,3 +4,4 @@
 .idea
 /src/composer.lock
 api.log
+/src/redis-data/
