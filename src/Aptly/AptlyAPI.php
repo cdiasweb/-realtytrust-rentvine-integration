@@ -18,6 +18,7 @@ class AptlyAPI
 
     public const ATTACH_RV_PROPERTY_FIELD = 'AtRqjs5M5gXsBAxYa';
     public const ATTACH_TO_PROPERTY_VALUE = 'Attach to property';
+    public const SUMMARY_FIELD = '4Nk6BfGjpK7HD7sQu';
 
     public const URL_TO_PDF_FIELD = 'tJmppg4PTEdAhRLat';
     public function __construct($baseUrl = "https://app.getaptly.com", $apiBaseUrl = "https://api.getaptly.com") {
@@ -229,4 +230,21 @@ class AptlyAPI
 
         return 'Failed to attach the document to building: No card ID';
     }
+
+    public function sanitizeFileName($string) {
+        // Replace spaces and commas with underscores
+        $string = str_replace([' ', ',', '$'], '_', $string);
+
+        // Remove any character that is not a letter, number, dash, or underscore
+        $string = preg_replace('/[^A-Za-z0-9_\-\.]/', '', $string);
+
+        // Optionally, limit the filename length
+        $string = substr($string, 0, 100);
+
+        // Lowercase (optional)
+        $string = strtolower($string);
+
+        return $string;
+    }
+
 }

@@ -296,9 +296,12 @@ class RentvineAPI
                 $tempPath = sys_get_temp_dir() . '/' . uniqid('gdrive_') . '.pdf';
                 $aptly->downloadPublicGoogleDriveFile("https://drive.usercontent.google.com/uc?id=$googleDriveFileId&export=download", $tempPath);
 
+                $fileName = $eventObject->data[AptlyAPI::SUMMARY_FIELD] ?? basename($tempPath);
+                $fileName = $aptly->sanitizeFileName($fileName);
+                Logger::warning('$fileName: ' . $fileName);
                 // Step 2: Mock the $_FILES array
                 $_FILES['file'] = [
-                    'name' => basename($tempPath),
+                    'name' => $fileName,
                     'type' => mime_content_type($tempPath),
                     'tmp_name' => $tempPath,
                     'error' => 0,
