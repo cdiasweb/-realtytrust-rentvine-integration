@@ -217,6 +217,9 @@ class RentvineAPI
         // Handle event
         $this->handleBuildingAttachment($data);
 
+        // Handle event
+        $this->handleLeaseAttachment($data);
+
         // Forward events
         $this->forwardWebhookEvent($data, self::MAKE_URL);
 
@@ -257,8 +260,14 @@ class RentvineAPI
     }
 
     public function handleBuildingAttachment($event) {
-        Logger::warning('Handle Building attachment: ' . json_encode($event));
         $eventObject = (object) $event;
+
+        $urlToPdf = $eventObject->data[AptlyAPI::URL_TO_PDF_FIELD];
+        $attachToPropertyAction = $eventObject->data[AptlyAPI::ATTACH_RV_PROPERTY_FIELD];
+        if (!$urlToPdf || $attachToPropertyAction !== AptlyAPI::ATTACH_TO_PROPERTY_VALUE) {
+            return;
+        }
+        Logger::warning('Handle Building attachment: ' . json_encode($event));
         Logger::warning('Object event: ' . $eventObject->action ?? $eventObject->action ?? '');
 
         $aptly = new AptlyAPI();
@@ -287,26 +296,7 @@ class RentvineAPI
                     return;
                 }
 
-                $googleDriveFileId = $aptly->extractGoogleDriveFileId($drivePdfFileLink);
-                Logger::warning('$googleDriveFileId: ' . $googleDriveFileId);
-                if (!$googleDriveFileId) {
-                    Logger::warning("Could not find the File ID for this URL: $drivePdfFileLink");
-                    return;
-                }
-                $tempPath = sys_get_temp_dir() . '/' . uniqid('gdrive_') . '.pdf';
-                $aptly->downloadPublicGoogleDriveFile("https://drive.usercontent.google.com/uc?id=$googleDriveFileId&export=download", $tempPath);
-
-                $fileName = $eventObject->data[AptlyAPI::SUMMARY_FIELD] ?? basename($tempPath);
-                $fileName = $aptly->sanitizeFileName($fileName);
-                Logger::warning('$fileName: ' . $fileName);
-                // Step 2: Mock the $_FILES array
-                $_FILES['file'] = [
-                    'name' => $fileName,
-                    'type' => mime_content_type($tempPath),
-                    'tmp_name' => $tempPath,
-                    'error' => 0,
-                    'size' => filesize($tempPath)
-                ];
+                $this->createFilePostObject($drivePdfFileLink, $eventObject);
 
                 $objectTypeId = 6;
                 // Check if we have units
@@ -319,14 +309,99 @@ class RentvineAPI
                     Logger::warning('$buildingRentvineId UNITS: ' . $buildingRentvineId);
                 }
 
-
                 $fileUploadedData = $this->addAttachmentToObject($buildingRentvineId, $objectTypeId, $_FILES);
                 Logger::warning('$fileUploadedData: ' . $fileUploadedData);
 
                 // Set the result to card
-                $updateFeedbackResult = $aptly->setFileUploadResult($eventObject->data['_id'] ?? null);
+                $updateFeedbackResult = $aptly->setFileUploadResult($eventObject->data['_id'] ?? null, [
+                    AptlyAPI::RV_APTLY_FIELD_NAME => 'Document attached to Property',
+                    AptlyAPI::RV_APTLY_ACTION_FIELD_NAME => 'Attached to property'
+                ]);
                 Logger::warning('$updateFeedbackResult: ' . $updateFeedbackResult);
             }
         }
+    }
+
+    public function handleLeaseAttachment($event) {
+        $eventObject = (object) $event;
+        $attachToLeaseAction = $eventObject->data[AptlyAPI::ATTACH_TO_RV_LEASE_ACTION_FIELD];
+        $urlToPDF = $eventObject->data[AptlyAPI::URL_TO_PDF_FIELD];
+        $shareWithTenant = $eventObject->data[AptlyAPI::SHARE_WITH_TENANT_FIELD];
+        $leaseCardId = $eventObject->data[AptlyAPI::LEASE_CARD_ID_FIELD][0]['_id'] ?? null;
+        if ($attachToLeaseAction !== AptlyAPI::ATTACH_TO_RV_LEASE_ACTION_VALUE || !$urlToPDF && !$shareWithTenant || !$leaseCardId) {
+            return;
+        }
+
+        $aptlyApi = new AptlyAPI();
+        $leaseCard = $aptlyApi->getCardById($leaseCardId);
+        $cardData = json_decode($leaseCard, true);
+        Logger::warning('$leaseCard: ' . json_encode($cardData));
+        $leaseRvId = $cardData['message']['data']['message']['data'][AptlyAPI::RENTVINE_ID_KEY] ?? null;
+        Logger::warning('$leaseRvId: ' . $leaseRvId);
+
+        $drivePdfFileLink = $aptlyApi->getCompleteFieldDataByFieldIdFromData($eventObject, AptlyAPI::URL_TO_PDF_FIELD);
+        Logger::warning('$drivePdfFileLink' . json_encode($drivePdfFileLink));
+
+        $this->createFilePostObject($drivePdfFileLink, $eventObject);
+
+        // Object type id: 4
+        $fileUploadedData = $this->addAttachmentToObject($leaseRvId, 4, $_FILES);
+        $fileUploadedData = json_decode($fileUploadedData, true);
+        Logger::warning('Lease file upload result: ' . json_encode($fileUploadedData));
+
+
+        // Share with tenant if applicable
+        $fileAttachmentId = $fileUploadedData['fileAttachment']['fileAttachmentID'] ?? null;
+        Logger::warning('$fileAttachmentId: ' . $fileAttachmentId);
+        if ($fileAttachmentId) {
+            $shareWithTenant = !($shareWithTenant === 'False');
+            $shareFileResult = $this->shareFile($fileAttachmentId, $shareWithTenant);
+            Logger::warning('$shareFileResult: ' . $shareFileResult);
+        }
+
+        // Set the result to card
+        $updateFeedbackResult = $aptlyApi->setFileUploadResult($eventObject->data['_id'] ?? null, [
+            AptlyAPI::ATTACH_TO_RV_LEASE_ACTION => 'Attached to lease',
+            AptlyAPI::ATTACH_TO_RV_LEASE_RESULT => 'Document attached to Lease'
+
+        ]);
+        Logger::warning('$updateFeedbackResult: ' . $updateFeedbackResult);
+    }
+
+    public function createFilePostObject($drivePdfFileLink, $eventObject) {
+        $aptly = new AptlyAPI();
+        $googleDriveFileId = $aptly->extractGoogleDriveFileId($drivePdfFileLink);
+        Logger::warning('$googleDriveFileId: ' . $googleDriveFileId);
+        if (!$googleDriveFileId) {
+            Logger::warning("Could not find the File ID for this URL: $drivePdfFileLink");
+            return;
+        }
+        $tempPath = sys_get_temp_dir() . '/' . uniqid('gdrive_') . '.pdf';
+        $aptly->downloadPublicGoogleDriveFile("https://drive.usercontent.google.com/uc?id=$googleDriveFileId&export=download", $tempPath);
+
+        $fileName = $eventObject->data[AptlyAPI::SUMMARY_FIELD] ?? basename($tempPath);
+        $fileName = $aptly->sanitizeFileName($fileName);
+        Logger::warning('$fileName: ' . $fileName);
+        // Step 2: Mock the $_FILES array
+        $_FILES['file'] = [
+            'name' => $fileName,
+            'type' => mime_content_type($tempPath),
+            'tmp_name' => $tempPath,
+            'error' => 0,
+            'size' => filesize($tempPath)
+        ];
+    }
+
+    public function shareFile($fileAttachmentId, $isSharedWithTenant = false, $isSharedWithOwner = false, $sendNotification = false) {
+        if (!$fileAttachmentId) {
+            return;
+        }
+        return $this->makeRequest('/manager/files/attachments/share/multi', 'POST', [
+            "pathIDs" => [],
+            "fileAttachmentIDs" => ["$fileAttachmentId"],
+            "isSharedWithTenant" => (int)$isSharedWithTenant,
+            "isSharedWithOwner" => (int)$isSharedWithOwner,
+            "sendNotification" => (int)$sendNotification
+        ]);
     }
 }

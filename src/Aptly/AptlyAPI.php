@@ -3,7 +3,6 @@
 namespace Aptly;
 
 use Rentvine\Logger;
-use Rentvine\RentvineAPI;
 
 class AptlyAPI
 {
@@ -19,6 +18,12 @@ class AptlyAPI
     public const ATTACH_RV_PROPERTY_FIELD = 'AtRqjs5M5gXsBAxYa';
     public const ATTACH_TO_PROPERTY_VALUE = 'Attach to property';
     public const SUMMARY_FIELD = '4Nk6BfGjpK7HD7sQu';
+    public const ATTACH_TO_RV_LEASE_ACTION_FIELD = 'viofd6a9TPf5MPE6p';
+    public const ATTACH_TO_RV_LEASE_ACTION_VALUE = 'Attach to lease';
+    public const SHARE_WITH_TENANT_FIELD = 'PWuLFwftMvd5W4GFK';
+    public const LEASE_CARD_ID_FIELD = '83LtLPsX3G3Dn6CCe';
+    public const ATTACH_TO_RV_LEASE_ACTION = 'Attach to rv lease action';
+    public const ATTACH_TO_RV_LEASE_RESULT = 'Attach to rv lease result';
 
     public const URL_TO_PDF_FIELD = 'tJmppg4PTEdAhRLat';
     public function __construct($baseUrl = "https://app.getaptly.com", $apiBaseUrl = "https://api.getaptly.com") {
@@ -219,12 +224,11 @@ class AptlyAPI
         return null;
     }
 
-    public function setFileUploadResult($cardId) {
+    public function setFileUploadResult($cardId, $data) {
         if ($cardId) {
             return self::makeAptlyApiRequest("/api/aptlet/fh35FSCxw6KB5xbZG", "POST", [
                 "_id" => $cardId,
-                AptlyAPI::RV_APTLY_FIELD_NAME => 'Document attached to Property',
-                AptlyAPI::RV_APTLY_ACTION_FIELD_NAME => 'Attached to property'
+                ...$data
             ]);
         }
 
