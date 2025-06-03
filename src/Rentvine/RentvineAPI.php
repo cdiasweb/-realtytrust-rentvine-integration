@@ -455,4 +455,11 @@ class RentvineAPI
             "sendNotification" => (int)$sendNotification
         ]);
     }
+
+    public function updatePropertyUnitsJson()
+    {
+        $json = $this->makeRequest('/manager/properties/units/export');
+        file_put_contents('unis.json', $json);
+        return "updated.";
+    }
 }

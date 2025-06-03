@@ -73,6 +73,9 @@ $routes = [
             $objectId = $_GET['objectID'];
             $objectTypeId = $_GET['objectTypeID'];
             echo $rentvine->addAttachmentToObject($objectId, $objectTypeId, $_FILES);
+        },
+        '/update-units-json' => function () use ($rentvine) {
+            return $rentvine->updatePropertyUnitsJson();
         }
     ],
     'DELETE' => [
