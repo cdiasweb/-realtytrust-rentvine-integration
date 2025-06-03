@@ -54,10 +54,6 @@ class RentvineAPI
 
         curl_close($curl);
 
-        if ($httpCode >= 400) {
-            return $response;
-        }
-
         return $response;
     }
 
@@ -176,6 +172,13 @@ class RentvineAPI
         return $this->makeRequest($endpoint);
     }
 
+    public function getPortfolioByIdIncludingOwners($portfolioId)
+    {
+        Logger::warning('Portfolio ID: ' . $portfolioId);
+        $endpoint = "/manager/portfolios/$portfolioId?includes=owners,properties,posting,statementSetting,ledger";
+        return $this->makeRequest($endpoint);
+    }
+
     public function searchLedgers($search)
     {
         $name = urlencode($search['name']);
@@ -214,11 +217,10 @@ class RentvineAPI
         $webhookEventInfo = 'Webhook Received: ' . json_encode($data);
         Logger::warning($webhookEventInfo);
 
-        // Handle event
+        // Handle events
         $this->handleBuildingAttachment($data);
-
-        // Handle event
         $this->handleLeaseAttachment($data);
+        $this->handlePostOwnerBillToPortfolio($data);
 
         // Forward events
         $this->forwardWebhookEvent($data, self::MAKE_URL);
@@ -249,14 +251,7 @@ class RentvineAPI
         // 3. Execute cURL request
         $forwardResponse = curl_exec($ch);
 
-        if (curl_errno($ch)) {
-            //Logger::warning('cURL error: ' . curl_error($ch));
-        } else {
-            //Logger::warning('Webhook forwarded successfully. Response: ' . $forwardResponse);
-        }
-
         curl_close($ch);
-        //Logger::warning("Forward to Make response: $forwardResponse");
     }
 
     public function handleBuildingAttachment($event) {
@@ -390,6 +385,56 @@ class RentvineAPI
             'error' => 0,
             'size' => filesize($tempPath)
         ];
+    }
+
+    public function handlePostOwnerBillToPortfolio($event)
+    {
+        $eventObject = (object) $event;
+        $postOwnerBillAction = $eventObject->data[AptlyAPI::POST_TO_OWNER_PORTFOLIO_FIELD] ?? null;
+        $portfolioCardId = $eventObject->data[AptlyAPI::PORTFOLIO_FIELD][0]['_id'] ?? null;
+        Logger::warning('Portfolio Card ID: ' . json_encode($portfolioCardId));
+        $aptly = new AptlyAPI();
+        $portfolioCard = $aptly->getCardById($portfolioCardId);
+        $portfolioCard = json_decode($portfolioCard, true);
+        $portfolioRvId = $portfolioCard['message']['data']['message']['data'][AptlyAPI::RENTVINE_ID_KEY] ?? null;
+        Logger::warning('$portfolioCard: ' . json_encode($portfolioCard));
+        Logger::warning('$portfolioRvId: ' . $portfolioRvId);
+        $rentvinePortfolioData = $this->getPortfolioByIdIncludingOwners($portfolioRvId);
+        $rentvinePortfolioData = json_decode($rentvinePortfolioData, true);
+        Logger::warning('$rentvinePortfolioData: ' . json_encode($rentvinePortfolioData));
+        $ownerContactId = $rentvinePortfolioData['owners'][0]['owner']['contactID'] ?? null;
+        $ledgerId = $rentvinePortfolioData['ledger']['ledgerID'] ?? null;
+
+        if ($postOwnerBillAction !== AptlyAPI::POST_TO_OWNER_PORTFOLIO_VALUE) {
+            return;
+        }
+
+        $billOriginalDate = $eventObject->data[AptlyAPI::OWNER_PORTFOLIO_BILL_DATE_FIELD] ?? '';
+        $billDate = date("Y-m-d", strtotime($billOriginalDate));
+
+        $billOriginalDateDue = $eventObject->data[AptlyAPI::OWNER_PORTFOLIO_BILL_DATE_DUE_FIELD] ?? '';
+        $dateDue = date("Y-m-d", strtotime($billOriginalDateDue));
+
+        $billData = [
+            "billDate" => $billDate,
+            "dateDue" => $dateDue,
+            "charges" => [[
+                "description" => $eventObject->data[AptlyAPI::OWNER_PORTFOLIO_BILL_DESCRIPTION_FIELD] ?? '',
+                "amount" => $eventObject->data[AptlyAPI::OWNER_PORTFOLIO_BILL_AMOUNT_FIELD]['amount'] ?? 0,
+                "ledgerID" => $ledgerId,
+                "chargeAccountID" => "11",
+                "fromPayer" => 1,
+                "toPayee" => 1
+            ]],
+            "payeeContactID" => $ownerContactId,
+            "leaseCharges" => [],
+            "reference" => "Bill from Aptly."
+        ];
+        Logger::warning('RUN handlePostOwnerBillToPortfolio: ' . json_encode($billData));
+
+        Logger::warning('Bill data: ' . json_encode($billData));
+        $result = $this->createOwnerPortfolioBill($billData);
+        Logger::warning('$result: ' . json_encode($result));
     }
 
     public function shareFile($fileAttachmentId, $isSharedWithTenant = false, $isSharedWithOwner = false, $sendNotification = false) {

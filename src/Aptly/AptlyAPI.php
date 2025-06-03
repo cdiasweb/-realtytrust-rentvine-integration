@@ -24,6 +24,14 @@ class AptlyAPI
     public const LEASE_CARD_ID_FIELD = '83LtLPsX3G3Dn6CCe';
     public const ATTACH_TO_RV_LEASE_ACTION = 'Attach to rv lease action';
     public const ATTACH_TO_RV_LEASE_RESULT = 'Attach to rv lease result';
+    public const POST_TO_OWNER_PORTFOLIO_FIELD = 'XQD5fixHSnDEs5Nrj';
+    public const POST_TO_OWNER_PORTFOLIO_VALUE = 'Post to owner portfolio';
+    public const OWNER_PORTFOLIO_BILL_AMOUNT_FIELD = '5a7PBd2u6aEvrgYxi';
+    public const OWNER_PORTFOLIO_BILL_DESCRIPTION_FIELD = 'k5Mj5r7nHiCjRGav7';
+    public const OWNER_PORTFOLIO_BILL_DATE_DUE_FIELD = 'JRDXwkC4zq4yqL9zy';
+    public const OWNER_PORTFOLIO_BILL_DATE_FIELD = 'zjH7HeQ7RZv7G3Hjh';
+    public const PORTFOLIO_FIELD = 'cxDKhtjxAYutokyCQ';
+
 
     public const URL_TO_PDF_FIELD = 'tJmppg4PTEdAhRLat';
     public function __construct($baseUrl = "https://app.getaptly.com", $apiBaseUrl = "https://api.getaptly.com") {
@@ -104,7 +112,6 @@ class AptlyAPI
     }
 
     public function updateCardFieldByCardId($cardId, $field) {
-        //https://api.getaptly.com/v1/cards/{card_id}
         return $this->makeAptlyApiRequest("/api/card/$cardId/fields/$field", "PUT");
     }
 
@@ -188,13 +195,11 @@ class AptlyAPI
 
     public function getFileById($fileId, $extension)
     {
-        //https://app.getaptly.com/cdn/storage/AptlyFiles/L3Ypae4yFnHvSf5T2/original/L3Ypae4yFnHvSf5T2.pdf
         return $this->makeAptlyApiRequest("/cdn/storage/AptlyFiles/$fileId/original/$fileId.$extension");
     }
 
     public function getFileUrlId($fileId, $extension)
     {
-        //https://app.getaptly.com/cdn/storage/AptlyFiles/L3Ypae4yFnHvSf5T2/original/L3Ypae4yFnHvSf5T2.pdf
         return "https://app.getaptly.com/cdn/storage/AptlyFiles/$fileId/original/$fileId.$extension";
     }
 

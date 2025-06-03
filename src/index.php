@@ -44,6 +44,9 @@ $routes = [
         },
         '/get-property-by-id/{id}' => function ($id) use ($rentvine) {
             echo $rentvine->getProperty($id);
+        },
+        '/get-portfolio-by-id-including-owners/{id}' => function ($id) use ($rentvine) {
+            echo $rentvine->getPortfolioByIdIncludingOwners($id);
         }
     ],
     'POST' => [
