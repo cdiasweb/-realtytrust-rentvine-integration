@@ -31,6 +31,7 @@ class AptlyAPI
     public const OWNER_PORTFOLIO_BILL_DATE_DUE_FIELD = 'JRDXwkC4zq4yqL9zy';
     public const OWNER_PORTFOLIO_BILL_DATE_FIELD = 'zjH7HeQ7RZv7G3Hjh';
     public const PORTFOLIO_FIELD = 'cxDKhtjxAYutokyCQ';
+    public const BILL_TO_OWNER_RESULT = "Post bill to owner portfolio result";
 
 
     public const URL_TO_PDF_FIELD = 'tJmppg4PTEdAhRLat';
@@ -229,7 +230,7 @@ class AptlyAPI
         return null;
     }
 
-    public function setFileUploadResult($cardId, $data) {
+    public function updateCardData($cardId, $data) {
         if ($cardId) {
             return self::makeAptlyApiRequest("/api/aptlet/fh35FSCxw6KB5xbZG", "POST", [
                 "_id" => $cardId,

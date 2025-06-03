@@ -308,7 +308,7 @@ class RentvineAPI
                 Logger::warning('$fileUploadedData: ' . $fileUploadedData);
 
                 // Set the result to card
-                $updateFeedbackResult = $aptly->setFileUploadResult($eventObject->data['_id'] ?? null, [
+                $updateFeedbackResult = $aptly->updateCardData($eventObject->data['_id'] ?? null, [
                     AptlyAPI::RV_APTLY_FIELD_NAME => 'Document attached to Property',
                     AptlyAPI::RV_APTLY_ACTION_FIELD_NAME => 'Attached to property'
                 ]);
@@ -355,7 +355,7 @@ class RentvineAPI
         }
 
         // Set the result to card
-        $updateFeedbackResult = $aptlyApi->setFileUploadResult($eventObject->data['_id'] ?? null, [
+        $updateFeedbackResult = $aptlyApi->updateCardData($eventObject->data['_id'] ?? null, [
             AptlyAPI::ATTACH_TO_RV_LEASE_ACTION => 'Attached to lease',
             AptlyAPI::ATTACH_TO_RV_LEASE_RESULT => 'Document attached to Lease'
 
@@ -435,6 +435,12 @@ class RentvineAPI
         Logger::warning('Bill data: ' . json_encode($billData));
         $result = $this->createOwnerPortfolioBill($billData);
         Logger::warning('$result: ' . json_encode($result));
+
+        $cardId = $eventObject->data['_id'];
+        $updateCardResult = $aptly->updateCardData($cardId, [
+            AptlyAPI::BILL_TO_OWNER_RESULT => "Bill added to portfolio owner."
+        ]);
+        Logger::warning('$updateCardResult: ' . $updateCardResult);
     }
 
     public function shareFile($fileAttachmentId, $isSharedWithTenant = false, $isSharedWithOwner = false, $sendNotification = false) {
