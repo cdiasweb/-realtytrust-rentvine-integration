@@ -76,6 +76,10 @@ $routes = [
         },
         '/update-units-json' => function () use ($rentvine) {
             echo $rentvine->updatePropertyUnitsJson();
+        },
+        '/find-unit' => function () use ($rentvine) {
+            $data = getJsonBody();
+            echo $rentvine->findUnitInJson($data);
         }
     ],
     'DELETE' => [

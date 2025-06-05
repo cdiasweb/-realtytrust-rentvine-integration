@@ -462,4 +462,32 @@ class RentvineAPI
         file_put_contents('unis.json', $json);
         return "updated.";
     }
+
+    public function findUnitInJson($data)
+    {
+        $searchText = $data['searchText'] ?? '';
+        $json = file_get_contents('units.json');
+        $data = json_decode($json, true);
+
+        // Prepare search words
+        $searchWords = array_filter(explode(' ', strtolower($searchText)));
+
+        $filtered = array_filter($data, function($item) use ($searchWords) {
+            $target = strtolower($item['unit']['name']);
+
+            // Check if all search words are in the target string
+            foreach ($searchWords as $word) {
+                if (stripos($target, $word) === false) {
+                    return false;
+                }
+            }
+            return true;
+        });
+
+        if (!empty($filtered)) {
+            echo json_encode($filtered);
+        } else {
+            echo "Not found.";
+        }
+    }
 }
