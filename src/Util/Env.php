@@ -29,4 +29,10 @@ class Env
         self::setup();
         return ($_ENV['APP_ENV'] ?? '') !== self::DEV_ENV;
     }
+
+    public static function openAIKey(): string
+    {
+        self::setup();
+        return $_ENV['OPEN_AI_KEY'] ?? '';
+    }
 }

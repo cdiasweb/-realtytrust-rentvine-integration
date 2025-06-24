@@ -32,6 +32,7 @@ class AptlyAPI
     public const OWNER_PORTFOLIO_BILL_DATE_FIELD = 'zjH7HeQ7RZv7G3Hjh';
     public const PORTFOLIO_FIELD = 'cxDKhtjxAYutokyCQ';
     public const BILL_TO_OWNER_RESULT = "Post bill to owner portfolio result";
+    public const CHANGES_FIELD = "changes";
 
 
     public const URL_TO_PDF_FIELD = 'tJmppg4PTEdAhRLat';

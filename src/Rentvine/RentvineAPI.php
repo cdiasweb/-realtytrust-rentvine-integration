@@ -4,6 +4,7 @@ namespace Rentvine;
 use Aptly\AptlyAPI;
 use CURLFile;
 use Exception;
+use lib\openAIClient;
 use Util\Env;
 
 class RentvineAPI
@@ -221,6 +222,7 @@ class RentvineAPI
         $this->handleBuildingAttachment($data);
         $this->handleLeaseAttachment($data);
         $this->handlePostOwnerBillToPortfolio($data);
+        $this->handleGetUnitFromDescription($data);
 
         // Forward events
         $this->forwardWebhookEvent($data, self::MAKE_URL);
@@ -257,8 +259,8 @@ class RentvineAPI
     public function handleBuildingAttachment($event) {
         $eventObject = (object) $event;
 
-        $urlToPdf = $eventObject->data[AptlyAPI::URL_TO_PDF_FIELD];
-        $attachToPropertyAction = $eventObject->data[AptlyAPI::ATTACH_RV_PROPERTY_FIELD];
+        $urlToPdf = $eventObject->data[AptlyAPI::URL_TO_PDF_FIELD] ?? null;
+        $attachToPropertyAction = $eventObject->data[AptlyAPI::ATTACH_RV_PROPERTY_FIELD] ?? null;
         if (!$urlToPdf || $attachToPropertyAction !== AptlyAPI::ATTACH_TO_PROPERTY_VALUE) {
             return;
         }
@@ -319,9 +321,9 @@ class RentvineAPI
 
     public function handleLeaseAttachment($event) {
         $eventObject = (object) $event;
-        $attachToLeaseAction = $eventObject->data[AptlyAPI::ATTACH_TO_RV_LEASE_ACTION_FIELD];
-        $urlToPDF = $eventObject->data[AptlyAPI::URL_TO_PDF_FIELD];
-        $shareWithTenant = $eventObject->data[AptlyAPI::SHARE_WITH_TENANT_FIELD];
+        $attachToLeaseAction = $eventObject->data[AptlyAPI::ATTACH_TO_RV_LEASE_ACTION_FIELD] ?? null;
+        $urlToPDF = $eventObject->data[AptlyAPI::URL_TO_PDF_FIELD] ?? null;
+        $shareWithTenant = $eventObject->data[AptlyAPI::SHARE_WITH_TENANT_FIELD] ?? null;
         $leaseCardId = $eventObject->data[AptlyAPI::LEASE_CARD_ID_FIELD][0]['_id'] ?? null;
         if ($attachToLeaseAction !== AptlyAPI::ATTACH_TO_RV_LEASE_ACTION_VALUE || !$urlToPDF && !$shareWithTenant || !$leaseCardId) {
             return;
@@ -395,6 +397,8 @@ class RentvineAPI
         Logger::warning('Portfolio Card ID: ' . json_encode($portfolioCardId));
         $aptly = new AptlyAPI();
         $portfolioCard = $aptly->getCardById($portfolioCardId);
+        Logger::warning('$portfolioCard: ' . $portfolioCard);
+
         $portfolioCard = json_decode($portfolioCard, true);
         $portfolioRvId = $portfolioCard['message']['data']['message']['data'][AptlyAPI::RENTVINE_ID_KEY] ?? null;
         Logger::warning('$portfolioCard: ' . json_encode($portfolioCard));
@@ -489,5 +493,40 @@ class RentvineAPI
         } else {
             echo "Not found.";
         }
+    }
+
+    public function findUnitInJsonUsingAI($data)
+    {
+        $client = new openAIClient();
+        $address = $data['address'] ?? '';
+        return $client->getUnitBasedOnAddress($address);
+    }
+
+    public function findVendorInJson($data)
+    {
+        $client = new openAIClient();
+        $searchText = $data['searchText'] ?? '';
+        return $client->getVendorBasedOnSearchText($searchText);
+    }
+
+    function getPropertyAddressFromDescription(string $description): ?string
+    {
+        if (preg_match('/Property address:\s*(.+?)(?=\n|$)/i', $description, $matches)) {
+            return trim($matches[1]);
+        }
+        return null;
+    }
+
+    function handleGetUnitFromDescription($event)
+    {
+        $eventObject = (object) $event;
+        $changes = $eventObject->changes ?? null;
+        Logger::warning('Changes: ' . json_encode($changes));
+        if ($changes[0]['field'] !== 'description') {
+            return;
+        }
+
+        $propertyAddress = $this->getPropertyAddressFromDescription($changes[0]['value']);
+        Logger::warning('Property address: ' . $propertyAddress);
     }
 }

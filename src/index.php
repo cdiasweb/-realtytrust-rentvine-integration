@@ -80,6 +80,14 @@ $routes = [
         '/find-unit' => function () use ($rentvine) {
             $data = getJsonBody();
             echo $rentvine->findUnitInJson($data);
+        },
+        '/find-unit-using-ai-with-address' => function () use ($rentvine) {
+            $data = getJsonBody();
+            echo $rentvine->findUnitInJsonUsingAI($data);
+        },
+        '/find-vendor-using-ai' => function () use ($rentvine) {
+            $data = getJsonBody();
+            echo $rentvine->findVendorInJson($data);
         }
     ],
     'DELETE' => [
