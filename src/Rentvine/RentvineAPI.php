@@ -4,6 +4,7 @@ namespace Rentvine;
 use Aptly\AptlyAPI;
 use CURLFile;
 use Exception;
+use Imagick;
 use lib\openAIClient;
 use Util\Env;
 
@@ -16,6 +17,10 @@ class RentvineAPI
     public const OWNER_BILLS_FIELD = 'Owner Bills';
     public const RENTVINE_ID = 'Rentvine ID';
     public const RENTVINE_DOC_UPLOAD_FIELD = 'Rentvine Building documents';
+    public const UNIT_FIELD = 'RPYgwSp52dD4tBbrN';
+    public const UNIT_MULTIPLE_FIELD = 'XA8oZNqj5hY2NFJSN';
+
+    public $units = [];
 
     const MAKE_WH_SIGNATURE = "YYLKFymLrrkfMyw3R-WCaphN9vZwN2z9PZb";
     const MAKE_URL = "https://hook.us1.make.com/tf4abmmirj1lo8crrhjn3nazh84wn3gi";
@@ -26,6 +31,7 @@ class RentvineAPI
         $this->userName = $userName;
         $this->password = $password;
         $this->baseUrl = rtrim($baseUrl, '/');
+        $this->loadUnits();
     }
 
     private function makeRequest($endpoint, $method = 'GET', $data = [], $headers = null)
@@ -118,6 +124,37 @@ class RentvineAPI
         return $response;
     }
 
+    public function loadUnits()
+    {
+        $filePath = __DIR__ . '/units.json';
+
+        // Load file content
+        $jsonString = file_get_contents($filePath);
+
+        // Decode JSON into PHP array or object
+        $data = json_decode($jsonString, true); // true = associative array
+
+        // Optional: handle error
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new Exception('Invalid JSON: ' . json_last_error_msg());
+        }
+
+        $this->units = $data;
+    }
+
+    public function getUnitFromNumberAndStreetAddress($address)
+    {
+        Logger::warning('getUnitFromNumberAndStreetAddress: ' . $address);
+        if (!empty($this->units)) {
+            foreach ($this->units as $unit) {
+                if (str_starts_with($unit['Title'], $address)) {
+                    Logger::warning('UNIT found');
+                    return $unit;
+                }
+            }
+        }
+    }
+
     public function getProperties($filters = [])
     {
         $queryString = http_build_query($filters);
@@ -129,6 +166,23 @@ class RentvineAPI
     {
         $endpoint = "/manager/properties/$propertyId";
         return $this->makeRequest($endpoint);
+    }
+
+    public function linkUnitIdToCard($unitId, $cardId)
+    {
+        Logger::warning('linkUnitIdToCard $unitId: ' . $unitId . ' $cardId: ' . $cardId);
+        $aptly = new AptlyAPI();
+        $unitData = $aptly->getCardById($unitId);
+        $unitCard = json_decode($unitData, true);
+        $unitCardData = $unitCard['message']['data']['message']['data'] ?? null;
+        $result = $aptly->updateCardData($cardId, [
+            'UNIT' => $unitId
+        ]);
+        Logger::warning('$unitCardData: ' . json_encode($unitCardData));
+        Logger::warning('Unit FIELD update result: ' . $result);
+
+        header("Content-Type: text/html");
+        echo '<script>window.close()</script> <button onclick="window.close()">Close Tab</button>';
     }
 
     public function getOwners()
@@ -216,13 +270,23 @@ class RentvineAPI
     public function handleWebhook($data)
     {
         $webhookEventInfo = 'Webhook Received: ' . json_encode($data);
-        Logger::warning($webhookEventInfo);
+        /*Logger::warning($webhookEventInfo);*/
+
+        /*foreach($data['changes'] as $change) {
+            if ($change['field'] === 'name') {
+                Logger::warning('Do not run it.');
+                return;
+            }
+        }*/
+
+        Logger::warning('Run it.');
 
         // Handle events
         $this->handleBuildingAttachment($data);
         $this->handleLeaseAttachment($data);
         $this->handlePostOwnerBillToPortfolio($data);
         $this->handleGetUnitFromDescription($data);
+        $this->handleGetUnitFromPDF($data);
 
         // Forward events
         $this->forwardWebhookEvent($data, self::MAKE_URL);
@@ -298,7 +362,7 @@ class RentvineAPI
                 $objectTypeId = 6;
                 // Check if we have units
                 $units = $this->searchUnitsByPropertyId($buildingRentvineId);
-                Logger::warning("units found: $units");
+                //Logger::warning("units found: $units");
                 $units = json_decode($units, true);
                 if (count($units) === 1) {
                     $buildingRentvineId = $units[0]['unit']['unitID'] ?? $buildingRentvineId;
@@ -394,18 +458,22 @@ class RentvineAPI
         $eventObject = (object) $event;
         $postOwnerBillAction = $eventObject->data[AptlyAPI::POST_TO_OWNER_PORTFOLIO_FIELD] ?? null;
         $portfolioCardId = $eventObject->data[AptlyAPI::PORTFOLIO_FIELD][0]['_id'] ?? null;
-        Logger::warning('Portfolio Card ID: ' . json_encode($portfolioCardId));
+        //Logger::warning('Portfolio Card ID: ' . json_encode($portfolioCardId));
         $aptly = new AptlyAPI();
         $portfolioCard = $aptly->getCardById($portfolioCardId);
-        Logger::warning('$portfolioCard: ' . $portfolioCard);
+        //Logger::warning('$portfolioCard: ' . $portfolioCard);
+
+        if (!$portfolioCard) {
+            return;
+        }
 
         $portfolioCard = json_decode($portfolioCard, true);
         $portfolioRvId = $portfolioCard['message']['data']['message']['data'][AptlyAPI::RENTVINE_ID_KEY] ?? null;
-        Logger::warning('$portfolioCard: ' . json_encode($portfolioCard));
-        Logger::warning('$portfolioRvId: ' . $portfolioRvId);
+        //Logger::warning('$portfolioCard: ' . json_encode($portfolioCard));
+        //Logger::warning('$portfolioRvId: ' . $portfolioRvId);
         $rentvinePortfolioData = $this->getPortfolioByIdIncludingOwners($portfolioRvId);
         $rentvinePortfolioData = json_decode($rentvinePortfolioData, true);
-        Logger::warning('$rentvinePortfolioData: ' . json_encode($rentvinePortfolioData));
+        //Logger::warning('$rentvinePortfolioData: ' . json_encode($rentvinePortfolioData));
         $ownerContactId = $rentvinePortfolioData['owners'][0]['owner']['contactID'] ?? null;
         $ledgerId = $rentvinePortfolioData['ledger']['ledgerID'] ?? null;
 
@@ -522,11 +590,121 @@ class RentvineAPI
         $eventObject = (object) $event;
         $changes = $eventObject->changes ?? null;
         Logger::warning('Changes: ' . json_encode($changes));
-        if ($changes[0]['field'] !== 'description') {
+        if (!$changes || $changes[0]['field'] !== 'description') {
             return;
         }
 
         $propertyAddress = $this->getPropertyAddressFromDescription($changes[0]['value']);
         Logger::warning('Property address: ' . $propertyAddress);
+    }
+
+    function handleGetDriveFileTextContent($driveUrl)
+    {
+        $downloadUrl = $this->getGoogleDriveDownloadUrl($driveUrl['driveUrl']);
+        Logger::warning('Download URL: ' . $downloadUrl);
+        $pdfPath = __DIR__ . '/temp.pdf';
+        $imagePath = __DIR__ . '/page.jpg';
+        $ocrOutputPath = __DIR__ . '/ocr_output.txt';
+
+        // 1. Download the PDF
+        file_put_contents($pdfPath, file_get_contents($downloadUrl));
+
+        // 2. Convert first page to image
+        $imagick = new Imagick();
+        $imagick->setResolution(300, 300); // High resolution for better OCR
+        $imagick->readImage($pdfPath . '[0]'); // First page only
+
+        $imagick->setImageBackgroundColor('white');
+        $imagick = $imagick->mergeImageLayers(Imagick::LAYERMETHOD_FLATTEN);
+
+        $imagick->setImageFormat('jpeg');
+        $imagick->writeImage($imagePath);
+
+        // 3. Run Tesseract OCR
+        exec("tesseract " . escapeshellarg($imagePath) . " " . escapeshellarg($ocrOutputPath));
+
+        $outputText = file_get_contents($ocrOutputPath . '.txt');
+
+        $client = new OpenAIClient();
+        $addresses = $client->getAddressesFromText($outputText);
+        Logger::warning('Addresses ' . json_encode($addresses));
+
+        // 4. Read and print the extracted text
+        $textContent = file_get_contents($ocrOutputPath . '.txt');
+        $possibleUnits = $client->getAddressesFromText($textContent);
+        $possibleUnits = json_decode($possibleUnits, true);
+
+        $units = [];
+        foreach ($possibleUnits['result'] as $possibleUnit) {
+            preg_match('/\d{1,10}\s{0,1}\w/', $possibleUnit, $matches);
+            $unitAddress = end($matches);
+            $units[] = $this->getUnitFromNumberAndStreetAddress($unitAddress);
+            Logger::warning('Address found: ' . json_encode($unitAddress));
+        }
+
+        // Units found
+        //Logger::warning('$units: ' . json_encode($units));
+        $aptlyIds = [];
+        foreach ($units as $unit) {
+            if ($unit['Aptly ID'] ?? null) {
+                $aptlyIds[] = [
+                    "_id" => $unit['Aptly ID'],
+                    "name" => $unit['Title'],
+                    "duogram" => "1D"
+                ];
+            }
+        }
+        Logger::warning('$aptlyIds: ' . json_encode($aptlyIds));
+
+        return json_encode($aptlyIds);
+    }
+
+    function handleGetUnitFromPDF($data) {
+        $unit = $data['data'][self::UNIT_FIELD] ?? [];
+        $multipleUnit = $data['data'][self::UNIT_MULTIPLE_FIELD] ?? '';
+        $pdfUrl = $data['data'][AptlyAPI::URL_TO_PDF_FIELD] ?? '';
+        if (empty($unit) && empty($multipleUnit) && $pdfUrl) {
+            $units = $this->handleGetDriveFileTextContent(['driveUrl' => $pdfUrl]);
+            if (is_string($units)) {
+                $units = json_decode($units, true);
+            }
+
+            if (count($units) > 1) {
+                $cardId = $data['data']['_id'];
+                $unitOptions = "";
+                foreach ($units as $unitOption) {
+                    $unitId = $unitOption['_id'];
+                    $unitOptions .= "<b>Card ID</b>: " . $unitId . "<br>";
+                    $unitOptions .= "<b>Name:</b> " . $unitOption['name'] . "<br><br>";
+                    $projectUrl = Env::getProjectUrl();
+                    $link = "$projectUrl/link-unit-id-to-card/$unitId/$cardId";
+                    $unitOptions .= "<a href='$link'>Link Unit to Card</a>" . "<br><br><br><br>";
+                }
+                $aptly = new AptlyAPI();
+                Logger::warning('UPDATE MULTIPLE: ' . json_encode($unitOptions));
+                $updateResult = $aptly->updateCardData($data['data']['_id'], [
+                    'Unit multiple found' => $unitOptions
+                ]);
+                Logger::warning('$updateResult MULTIPLE: ' . json_encode($updateResult));
+            } else {
+                $unitOption = $units[0];
+                $unitOptions = "<b>Card ID</b>: " . $unitOption['_id'] . "<br>";
+                $unitOptions .= "<b>Name:</b> " . $unitOption['name'] . "<br><br>";
+                $aptly = new AptlyAPI();
+                Logger::warning('UPDATE UNIQUE: ' . json_encode($unitOptions));
+                $updateResult = $aptly->updateCardData($data['data']['_id'], [
+                    self::UNIT_FIELD => $unitOption['_id']
+                ]);
+
+                Logger::warning('$updateResult: ' . json_encode($updateResult));
+            }
+        }
+    }
+
+    function getGoogleDriveDownloadUrl($shareUrl) {
+        if (preg_match('/\/d\/(.*?)\//', $shareUrl, $matches)) {
+            return 'https://drive.google.com/uc?export=download&id=' . $matches[1];
+        }
+        return false;
     }
 }

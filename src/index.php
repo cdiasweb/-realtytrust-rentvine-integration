@@ -47,15 +47,22 @@ $routes = [
         },
         '/get-portfolio-by-id-including-owners/{id}' => function ($id) use ($rentvine) {
             echo $rentvine->getPortfolioByIdIncludingOwners($id);
+        },
+        '/link-unit-id-to-card/{unitId}/{cardId}' => function ($unitId, $cardId) use ($rentvine) {
+            echo $rentvine->linkUnitIdToCard($unitId, $cardId);
         }
     ],
     'POST' => [
         '/hook' => function () use ($rentvine) {
+            header("HTTP/1.1 202 OK");
+            header("Content-Type: text/plain");
+            header("Connection: close");
+            $size = ob_get_length();
+            header("Content-Length: $size");
+            echo 'Accepted';
+
             $data = getJsonBody();
             $rentvine->handleWebhook($data);
-            header("HTTP/1.1 200 OK");
-            echo 'Accepted';
-            exit(0);
         },
         '/add-billing' => function () use ($rentvine) {
             $data = getJsonBody();
@@ -88,6 +95,10 @@ $routes = [
         '/find-vendor-using-ai' => function () use ($rentvine) {
             $data = getJsonBody();
             echo $rentvine->findVendorInJson($data);
+        },
+        '/getUnitFromPdf' => function () use ($rentvine) {
+            $data = getJsonBody();
+            echo $rentvine->handleGetDriveFileTextContent($data);
         }
     ],
     'DELETE' => [

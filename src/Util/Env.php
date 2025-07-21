@@ -35,4 +35,10 @@ class Env
         self::setup();
         return $_ENV['OPEN_AI_KEY'] ?? '';
     }
+
+    public static function getProjectUrl(): string
+    {
+        self::setup();
+        return $_ENV['PROJECT_URL'] ?? '';
+    }
 }
