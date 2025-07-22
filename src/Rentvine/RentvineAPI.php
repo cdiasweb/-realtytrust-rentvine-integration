@@ -682,7 +682,7 @@ class RentvineAPI
                         $unitOptions .= "<b>Name:</b> " . $unitOption['name'] . "<br><br>";
                         $projectUrl = Env::getProjectUrl();
                         $link = "$projectUrl/link-unit-id-to-card/$unitId/$cardId";
-                        $unitOptions .= "<a href='$link'>Link Unit to Card</a>" . "<br><br><br><br>";
+                        $unitOptions .= "<a href='$link'>Link Unit to Card</a>" . "<br><br>";
                     }
                     $aptly = new AptlyAPI();
                     Logger::warning('UPDATE MULTIPLE: ' . json_encode($unitOptions));
