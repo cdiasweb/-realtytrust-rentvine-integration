@@ -6,6 +6,7 @@ use CURLFile;
 use Exception;
 use Imagick;
 use lib\openAIClient;
+use Throwable;
 use Util\Env;
 
 class RentvineAPI
@@ -660,45 +661,49 @@ class RentvineAPI
     }
 
     function handleGetUnitFromPDF($data) {
-        Logger::warning('handleGetUnitFromPDF: START...');
-        $unit = $data['data'][self::UNIT_FIELD] ?? [];
-        $multipleUnit = $data['data'][self::UNIT_MULTIPLE_FIELD] ?? '';
-        $pdfUrl = $data['data'][AptlyAPI::URL_TO_PDF_FIELD] ?? '';
-        if (empty($unit) && empty($multipleUnit) && $pdfUrl) {
-            $units = $this->handleGetDriveFileTextContent(['driveUrl' => $pdfUrl]);
-            if (is_string($units)) {
-                $units = json_decode($units, true);
-            }
-
-            if (count($units) > 1) {
-                $cardId = $data['data']['_id'];
-                $unitOptions = "";
-                foreach ($units as $unitOption) {
-                    $unitId = $unitOption['_id'];
-                    $unitOptions .= "<b>Card ID</b>: " . $unitId . "<br>";
-                    $unitOptions .= "<b>Name:</b> " . $unitOption['name'] . "<br><br>";
-                    $projectUrl = Env::getProjectUrl();
-                    $link = "$projectUrl/link-unit-id-to-card/$unitId/$cardId";
-                    $unitOptions .= "<a href='$link'>Link Unit to Card</a>" . "<br><br><br><br>";
+        try {
+            Logger::warning('handleGetUnitFromPDF: START...');
+            $unit = $data['data'][self::UNIT_FIELD] ?? [];
+            $multipleUnit = $data['data'][self::UNIT_MULTIPLE_FIELD] ?? '';
+            $pdfUrl = $data['data'][AptlyAPI::URL_TO_PDF_FIELD] ?? '';
+            if (empty($unit) && empty($multipleUnit) && $pdfUrl) {
+                $units = $this->handleGetDriveFileTextContent(['driveUrl' => $pdfUrl]);
+                if (is_string($units)) {
+                    $units = json_decode($units, true);
                 }
-                $aptly = new AptlyAPI();
-                Logger::warning('UPDATE MULTIPLE: ' . json_encode($unitOptions));
-                $updateResult = $aptly->updateCardData($data['data']['_id'], [
-                    'Unit multiple found' => $unitOptions
-                ]);
-                Logger::warning('$updateResult MULTIPLE: ' . json_encode($updateResult));
-            } else {
-                $unitOption = $units[0];
-                $unitOptions = "<b>Card ID</b>: " . $unitOption['_id'] . "<br>";
-                $unitOptions .= "<b>Name:</b> " . $unitOption['name'] . "<br><br>";
-                $aptly = new AptlyAPI();
-                Logger::warning('UPDATE UNIQUE: ' . json_encode($unitOptions));
-                $updateResult = $aptly->updateCardData($data['data']['_id'], [
-                    self::UNIT_FIELD => $unitOption['_id']
-                ]);
 
-                Logger::warning('$updateResult: ' . json_encode($updateResult));
+                if (count($units) > 1) {
+                    $cardId = $data['data']['_id'];
+                    $unitOptions = "";
+                    foreach ($units as $unitOption) {
+                        $unitId = $unitOption['_id'];
+                        $unitOptions .= "<b>Card ID</b>: " . $unitId . "<br>";
+                        $unitOptions .= "<b>Name:</b> " . $unitOption['name'] . "<br><br>";
+                        $projectUrl = Env::getProjectUrl();
+                        $link = "$projectUrl/link-unit-id-to-card/$unitId/$cardId";
+                        $unitOptions .= "<a href='$link'>Link Unit to Card</a>" . "<br><br><br><br>";
+                    }
+                    $aptly = new AptlyAPI();
+                    Logger::warning('UPDATE MULTIPLE: ' . json_encode($unitOptions));
+                    $updateResult = $aptly->updateCardData($data['data']['_id'], [
+                        'Unit multiple found' => $unitOptions
+                    ]);
+                    Logger::warning('$updateResult MULTIPLE: ' . json_encode($updateResult));
+                } else {
+                    $unitOption = $units[0];
+                    $unitOptions = "<b>Card ID</b>: " . $unitOption['_id'] . "<br>";
+                    $unitOptions .= "<b>Name:</b> " . $unitOption['name'] . "<br><br>";
+                    $aptly = new AptlyAPI();
+                    Logger::warning('UPDATE UNIQUE: ' . json_encode($unitOptions));
+                    $updateResult = $aptly->updateCardData($data['data']['_id'], [
+                        self::UNIT_FIELD => $unitOption['_id']
+                    ]);
+
+                    Logger::warning('$updateResult: ' . json_encode($updateResult));
+                }
             }
+        } catch (Throwable $exception) {
+            Logger::warning('Error while attempting to get Units: ' . $exception->getMessage());
         }
     }
 
