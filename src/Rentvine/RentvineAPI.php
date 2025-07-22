@@ -660,6 +660,7 @@ class RentvineAPI
     }
 
     function handleGetUnitFromPDF($data) {
+        Logger::warning('handleGetUnitFromPDF: START...');
         $unit = $data['data'][self::UNIT_FIELD] ?? [];
         $multipleUnit = $data['data'][self::UNIT_MULTIPLE_FIELD] ?? '';
         $pdfUrl = $data['data'][AptlyAPI::URL_TO_PDF_FIELD] ?? '';
