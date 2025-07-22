@@ -620,6 +620,7 @@ class RentvineAPI
 
         $imagick->setImageFormat('jpeg');
         $imagick->writeImage($imagePath);
+        exec("chmod 644 $imagePath");
 
         // 3. Run Tesseract OCR
         exec("tesseract " . escapeshellarg($imagePath) . " " . escapeshellarg($ocrOutputPath));
