@@ -148,7 +148,7 @@ class RentvineAPI
         Logger::warning('getUnitFromNumberAndStreetAddress: ' . $address);
         if (!empty($this->units)) {
             foreach ($this->units as $unit) {
-                if (str_starts_with($unit['Title'], $address)) {
+                if (str_starts_with(strtolower($unit['Title']), strtolower($address))) {
                     Logger::warning('UNIT found');
                     return $unit;
                 }
@@ -626,8 +626,34 @@ class RentvineAPI
         exec("tesseract " . escapeshellarg($imagePath) . " " . escapeshellarg($ocrOutputPath));
 
         $outputText = file_get_contents($ocrOutputPath . '.txt');
+        preg_match_all('/\d{1,8}(\s{0,1}\w+\s{0,1}){1,4}(?=(,|\n))/', $outputText, $matches);
+        $options = json_encode($matches);
+        preg_match_all('/\d{1,8}\s\w+/', $options, $matches);
+        Logger::warning('$matches: ' . json_encode($matches));
 
-        $client = new OpenAIClient();
+        $units = [];
+        foreach ($matches[0] as $possibleUnit) {
+            if (str_starts_with('3407 W', $possibleUnit)) {
+                continue;
+            }
+            $units[] = $this->getUnitFromNumberAndStreetAddress($possibleUnit);
+        }
+
+        $aptlyIds = [];
+        foreach ($units as $unit) {
+            if ($unit['Aptly ID'] ?? null) {
+                $aptlyIds[] = [
+                    "_id" => $unit['Aptly ID'],
+                    "name" => $unit['Title'],
+                    "duogram" => "1D"
+                ];
+            }
+        }
+        Logger::warning('$aptlyIds: ' . json_encode($aptlyIds));
+
+        return json_encode($aptlyIds);
+
+        /*$client = new OpenAIClient();
         $addresses = $client->getAddressesFromText($outputText);
         Logger::warning('Addresses ' . json_encode($addresses));
 
@@ -658,7 +684,7 @@ class RentvineAPI
         }
         Logger::warning('$aptlyIds: ' . json_encode($aptlyIds));
 
-        return json_encode($aptlyIds);
+        return json_encode($aptlyIds);*/
     }
 
     function handleGetUnitFromPDF($data) {
@@ -669,6 +695,7 @@ class RentvineAPI
             $pdfUrl = $data['data'][AptlyAPI::URL_TO_PDF_FIELD] ?? '';
             if (empty($unit) && empty($multipleUnit) && $pdfUrl) {
                 $units = $this->handleGetDriveFileTextContent(['driveUrl' => $pdfUrl]);
+                Logger::warning('$units: ' . json_encode($units));
                 if (is_string($units)) {
                     $units = json_decode($units, true);
                 }
