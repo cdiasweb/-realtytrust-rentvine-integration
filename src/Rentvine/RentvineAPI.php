@@ -626,9 +626,9 @@ class RentvineAPI
         exec("tesseract " . escapeshellarg($imagePath) . " " . escapeshellarg($ocrOutputPath));
 
         $outputText = file_get_contents($ocrOutputPath . '.txt');
-        preg_match_all('/\d{1,8}(\s{0,1}\w+\s{0,1}){1,4}(?=(,|\n))/', $outputText, $matches);
-        $options = json_encode($matches);
-        preg_match_all('/\d{1,8}\s\w+/', $options, $matches);
+        //preg_match_all('/\d{1,8}(\s{0,1}\w+\s{0,1}){1,4}(?=(,|\n))/', $outputText, $matches);
+        //$options = json_encode($matches);
+        preg_match_all('/\d{1,8}\s\w+/', $outputText, $matches);
         Logger::warning('$matches: ' . json_encode($matches));
 
         $units = [];
@@ -719,12 +719,11 @@ class RentvineAPI
                     Logger::warning('$updateResult MULTIPLE: ' . json_encode($updateResult));
                 } else {
                     $unitOption = $units[0];
-                    $unitOptions = "<b>Card ID</b>: " . $unitOption['_id'] . "<br>";
-                    $unitOptions .= "<b>Name:</b> " . $unitOption['name'] . "<br><br>";
                     $aptly = new AptlyAPI();
-                    Logger::warning('UPDATE UNIQUE: ' . json_encode($unitOptions));
+                    Logger::warning('UPDATE UNIQUE: ' . json_encode($unitOption));
+                    Logger::warning('UPDATE UNIT: ' . json_encode($units));
                     $updateResult = $aptly->updateCardData($data['data']['_id'], [
-                        self::UNIT_FIELD => $unitOption['_id']
+                        'Unit' => $unitOption['_id']
                     ]);
 
                     Logger::warning('$updateResult: ' . json_encode($updateResult));
