@@ -603,9 +603,10 @@ class RentvineAPI
     {
         $downloadUrl = $this->getGoogleDriveDownloadUrl($driveUrl['driveUrl']);
         Logger::warning('Download URL: ' . $downloadUrl);
-        $pdfPath = __DIR__ . '/temp.pdf';
-        $imagePath = __DIR__ . '/page.jpg';
-        $ocrOutputPath = __DIR__ . '/ocr_output.txt';
+        $uid = uniqid();
+        $pdfPath = __DIR__ . "/temp.$uid.pdf";
+        $imagePath = __DIR__ . "/page.$uid.jpg";
+        $ocrOutputPath = __DIR__ . "/ocr_output.$uid";
 
         // 1. Download the PDF
         file_put_contents($pdfPath, file_get_contents($downloadUrl));
@@ -625,7 +626,8 @@ class RentvineAPI
         // 3. Run Tesseract OCR
         exec("tesseract " . escapeshellarg($imagePath) . " " . escapeshellarg($ocrOutputPath));
 
-        $outputText = file_get_contents($ocrOutputPath . '.txt');
+        $outputText = file_get_contents("$ocrOutputPath.txt");
+        exec("rm -rf " . escapeshellarg($pdfPath) . " " . escapeshellarg($imagePath) . " " . escapeshellarg("$ocrOutputPath.txt"));
         //preg_match_all('/\d{1,8}(\s{0,1}\w+\s{0,1}){1,4}(?=(,|\n))/', $outputText, $matches);
         //$options = json_encode($matches);
         preg_match_all('/\d{1,8}\s\w+/', $outputText, $matches);
