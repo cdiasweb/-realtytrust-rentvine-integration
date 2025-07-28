@@ -128,6 +128,7 @@ class RentvineAPI
     public function loadUnits()
     {
         $filePath = __DIR__ . '/units.json';
+        Logger::warning('Loading units from: ' . $filePath);
 
         // Load file content
         $jsonString = file_get_contents($filePath);
@@ -614,6 +615,7 @@ class RentvineAPI
         // 2. Convert first page to image
         $imagick = new Imagick();
         $imagick->setResolution(300, 300); // High resolution for better OCR
+        Logger::warning('Looking for the file: ' . $pdfPath);
         $imagick->readImage($pdfPath . '[0]'); // First page only
 
         $imagick->setImageBackgroundColor('white');
@@ -732,7 +734,7 @@ class RentvineAPI
                 }
             }
         } catch (Throwable $exception) {
-            Logger::warning('Error while attempting to get Units: ' . $exception->getMessage());
+            Logger::warning('Error while attempting to get Units: ' . $exception->getMessage() . PHP_EOL . $exception->getTraceAsString());
         }
     }
 

@@ -4,6 +4,7 @@
 
 require_once './vendor/autoload.php';
 
+use Aptly\AptlyAPI;
 use Rentvine\RentvineAPI;
 
 $requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
@@ -50,6 +51,15 @@ $routes = [
         },
         '/link-unit-id-to-card/{unitId}/{cardId}' => function ($unitId, $cardId) use ($rentvine) {
             echo $rentvine->linkUnitIdToCard($unitId, $cardId);
+        },
+        'refresh-unit-options/{cardId}/{driveUrl}' => function ($cardId, $driveFileCode) use ($rentvine) {
+            $baseUrl = "https://drive.google.com/file/d/$driveFileCode/view";
+            echo $rentvine->handleGetUnitFromPDF([
+                'data' => [
+                    '_id' => $cardId,
+                    AptlyAPI::URL_TO_PDF_FIELD => $baseUrl,
+                ]
+            ]);
         }
     ],
     'POST' => [
