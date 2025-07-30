@@ -52,14 +52,20 @@ $routes = [
         '/link-unit-id-to-card/{unitId}/{cardId}' => function ($unitId, $cardId) use ($rentvine) {
             echo $rentvine->linkUnitIdToCard($unitId, $cardId);
         },
-        'refresh-unit-options/{cardId}/{driveUrl}' => function ($cardId, $driveFileCode) use ($rentvine) {
+        '/refresh-unit-options' => function () use ($rentvine) {
+            $cardId = $_GET['cardId'];
+            $driveFileCode = $_GET['driveFileCode'];
+
             $baseUrl = "https://drive.google.com/file/d/$driveFileCode/view";
-            echo $rentvine->handleGetUnitFromPDF([
+            $rentvine->handleGetUnitFromPDF([
                 'data' => [
                     '_id' => $cardId,
                     AptlyAPI::URL_TO_PDF_FIELD => $baseUrl,
                 ]
-            ]);
+            ], true);
+
+            header("Content-Type: text/html");
+            echo '<script>window.close()</script> <button onclick="window.close()">Close Tab</button>';
         }
     ],
     'POST' => [

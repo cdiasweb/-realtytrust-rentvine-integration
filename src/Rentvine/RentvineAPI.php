@@ -412,7 +412,6 @@ class RentvineAPI
         $fileUploadedData = json_decode($fileUploadedData, true);
         Logger::warning('Lease file upload result: ' . json_encode($fileUploadedData));
 
-
         // Share with tenant if applicable
         $fileAttachmentId = $fileUploadedData['fileAttachment']['fileAttachmentID'] ?? null;
         Logger::warning('$fileAttachmentId: ' . $fileAttachmentId);
@@ -629,11 +628,8 @@ class RentvineAPI
         exec("tesseract " . escapeshellarg($imagePath) . " " . escapeshellarg($ocrOutputPath));
 
         $outputText = file_get_contents("$ocrOutputPath.txt");
-        exec("rm -rf " . escapeshellarg($pdfPath) . " " . escapeshellarg($imagePath) . " " . escapeshellarg("$ocrOutputPath.txt"));
-        //preg_match_all('/\d{1,8}(\s{0,1}\w+\s{0,1}){1,4}(?=(,|\n))/', $outputText, $matches);
-        //$options = json_encode($matches);
         preg_match_all('/\d{1,8}\s\w+/', $outputText, $matches);
-        Logger::warning('$matches: ' . json_encode($matches));
+        exec("rm -rf " . escapeshellarg($pdfPath) . " " . escapeshellarg($imagePath) . " " . escapeshellarg("$ocrOutputPath.txt"));
 
         $units = [];
         foreach ($matches[0] as $possibleUnit) {
@@ -691,13 +687,13 @@ class RentvineAPI
         return json_encode($aptlyIds);*/
     }
 
-    function handleGetUnitFromPDF($data) {
+    function handleGetUnitFromPDF($data, $force = false) {
         try {
             Logger::warning('handleGetUnitFromPDF: START...');
             $unit = $data['data'][self::UNIT_FIELD] ?? [];
             $multipleUnit = $data['data'][self::UNIT_MULTIPLE_FIELD] ?? '';
             $pdfUrl = $data['data'][AptlyAPI::URL_TO_PDF_FIELD] ?? '';
-            if (empty($unit) && empty($multipleUnit) && $pdfUrl) {
+            if (empty($unit) && empty($multipleUnit) && $pdfUrl || $force) {
                 $units = $this->handleGetDriveFileTextContent(['driveUrl' => $pdfUrl]);
                 Logger::warning('$units: ' . json_encode($units));
                 if (is_string($units)) {
@@ -705,13 +701,17 @@ class RentvineAPI
                 }
 
                 if (count($units) > 1) {
+                    $projectUrl = Env::getProjectUrl();
                     $cardId = $data['data']['_id'];
-                    $unitOptions = "";
+                    preg_match('/(?<=\/d\/)(.*?)(?=\/)/', $pdfUrl, $matches);
+                    $driveId = $matches[0] ?? '';
+                    $refreshCardIdEncoded = $cardId;
+                    $refreshLink = "$projectUrl/refresh-unit-options?cardId=$refreshCardIdEncoded&driveFileCode=$driveId";
+                    $unitOptions = "<a href='$refreshLink'>Refresh options</a> <br><br>";
                     foreach ($units as $unitOption) {
                         $unitId = $unitOption['_id'];
                         $unitOptions .= "<b>Card ID</b>: " . $unitId . "<br>";
                         $unitOptions .= "<b>Name:</b> " . $unitOption['name'] . "<br><br>";
-                        $projectUrl = Env::getProjectUrl();
                         $link = "$projectUrl/link-unit-id-to-card/$unitId/$cardId";
                         $unitOptions .= "<a href='$link'>Link Unit to Card</a>" . "<br><br>";
                     }
