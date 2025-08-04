@@ -20,8 +20,10 @@ class RentvineAPI
     public const RENTVINE_DOC_UPLOAD_FIELD = 'Rentvine Building documents';
     public const UNIT_FIELD = 'RPYgwSp52dD4tBbrN';
     public const UNIT_MULTIPLE_FIELD = 'XA8oZNqj5hY2NFJSN';
+    public const VENDOR_FIELD = 'zGDJ4kpm2Xd54Rqnc';
 
     public $units = [];
+    public $vendors = [];
 
     const MAKE_WH_SIGNATURE = "YYLKFymLrrkfMyw3R-WCaphN9vZwN2z9PZb";
     const MAKE_URL = "https://hook.us1.make.com/tf4abmmirj1lo8crrhjn3nazh84wn3gi";
@@ -33,6 +35,7 @@ class RentvineAPI
         $this->password = $password;
         $this->baseUrl = rtrim($baseUrl, '/');
         $this->loadUnits();
+        $this->loadVendors();
     }
 
     private function makeRequest($endpoint, $method = 'GET', $data = [], $headers = null)
@@ -142,6 +145,25 @@ class RentvineAPI
         }
 
         $this->units = $data;
+    }
+
+    public function loadVendors()
+    {
+        $filePath = __DIR__ . '/vendors.json';
+        Logger::warning('Loading vendors from: ' . $filePath);
+
+        // Load file content
+        $jsonString = file_get_contents($filePath);
+
+        // Decode JSON into PHP array or object
+        $data = json_decode($jsonString, true); // true = associative array
+
+        // Optional: handle error
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new Exception('Invalid JSON: ' . json_last_error_msg());
+        }
+
+        $this->vendors = $data;
     }
 
     public function getUnitFromNumberAndStreetAddress($address)
@@ -289,6 +311,7 @@ class RentvineAPI
         $this->handlePostOwnerBillToPortfolio($data);
         $this->handleGetUnitFromDescription($data);
         $this->handleGetUnitFromPDF($data);
+        $this->handleGetVendor($data);
 
         // Forward events
         $this->forwardWebhookEvent($data, self::MAKE_URL);
@@ -599,37 +622,10 @@ class RentvineAPI
         Logger::warning('Property address: ' . $propertyAddress);
     }
 
-    function handleGetDriveFileTextContent($driveUrl)
+    function getUnitsFromDriveFile($driveUrl)
     {
-        $downloadUrl = $this->getGoogleDriveDownloadUrl($driveUrl['driveUrl']);
-        Logger::warning('Download URL: ' . $downloadUrl);
-        $uid = uniqid();
-        $pdfPath = __DIR__ . "/temp.$uid.pdf";
-        $imagePath = __DIR__ . "/page.$uid.jpg";
-        $ocrOutputPath = __DIR__ . "/ocr_output.$uid";
-
-        // 1. Download the PDF
-        file_put_contents($pdfPath, file_get_contents($downloadUrl));
-
-        // 2. Convert first page to image
-        $imagick = new Imagick();
-        $imagick->setResolution(300, 300); // High resolution for better OCR
-        Logger::warning('Looking for the file: ' . $pdfPath);
-        $imagick->readImage($pdfPath . '[0]'); // First page only
-
-        $imagick->setImageBackgroundColor('white');
-        $imagick = $imagick->mergeImageLayers(Imagick::LAYERMETHOD_FLATTEN);
-
-        $imagick->setImageFormat('jpeg');
-        $imagick->writeImage($imagePath);
-        exec("chmod 644 $imagePath");
-
-        // 3. Run Tesseract OCR
-        exec("tesseract " . escapeshellarg($imagePath) . " " . escapeshellarg($ocrOutputPath));
-
-        $outputText = file_get_contents("$ocrOutputPath.txt");
+        $outputText = $this->getDriveFileTextContent($driveUrl['driveUrl']);
         preg_match_all('/\d{1,8}\s\w+/', $outputText, $matches);
-        exec("rm -rf " . escapeshellarg($pdfPath) . " " . escapeshellarg($imagePath) . " " . escapeshellarg("$ocrOutputPath.txt"));
 
         $units = [];
         foreach ($matches[0] as $possibleUnit) {
@@ -652,39 +648,6 @@ class RentvineAPI
         Logger::warning('$aptlyIds: ' . json_encode($aptlyIds));
 
         return json_encode($aptlyIds);
-
-        /*$client = new OpenAIClient();
-        $addresses = $client->getAddressesFromText($outputText);
-        Logger::warning('Addresses ' . json_encode($addresses));
-
-        // 4. Read and print the extracted text
-        $textContent = file_get_contents($ocrOutputPath . '.txt');
-        $possibleUnits = $client->getAddressesFromText($textContent);
-        $possibleUnits = json_decode($possibleUnits, true);
-
-        $units = [];
-        foreach ($possibleUnits['result'] as $possibleUnit) {
-            preg_match('/\d{1,10}\s{0,1}\w/', $possibleUnit, $matches);
-            $unitAddress = end($matches);
-            $units[] = $this->getUnitFromNumberAndStreetAddress($unitAddress);
-            Logger::warning('Address found: ' . json_encode($unitAddress));
-        }
-
-        // Units found
-        //Logger::warning('$units: ' . json_encode($units));
-        $aptlyIds = [];
-        foreach ($units as $unit) {
-            if ($unit['Aptly ID'] ?? null) {
-                $aptlyIds[] = [
-                    "_id" => $unit['Aptly ID'],
-                    "name" => $unit['Title'],
-                    "duogram" => "1D"
-                ];
-            }
-        }
-        Logger::warning('$aptlyIds: ' . json_encode($aptlyIds));
-
-        return json_encode($aptlyIds);*/
     }
 
     function handleGetUnitFromPDF($data, $force = false) {
@@ -694,7 +657,7 @@ class RentvineAPI
             $multipleUnit = $data['data'][self::UNIT_MULTIPLE_FIELD] ?? '';
             $pdfUrl = $data['data'][AptlyAPI::URL_TO_PDF_FIELD] ?? '';
             if (empty($unit) && empty($multipleUnit) && $pdfUrl || $force) {
-                $units = $this->handleGetDriveFileTextContent(['driveUrl' => $pdfUrl]);
+                $units = $this->getUnitsFromDriveFile(['driveUrl' => $pdfUrl]);
                 Logger::warning('$units: ' . json_encode($units));
                 if (is_string($units)) {
                     $units = json_decode($units, true);
@@ -738,10 +701,126 @@ class RentvineAPI
         }
     }
 
+    function handleGetVendor($data)
+    {
+        Logger::warning('handleGetVendor: START...');
+        $vendor = $data['data'][self::VENDOR_FIELD] ?? [];
+        $pdfUrl = $data['data'][AptlyAPI::URL_TO_PDF_FIELD] ?? '';
+        Logger::warning('$vendor: ' . json_encode($vendor));
+        if (empty($vendor) && $pdfUrl) {
+            Logger::warning('RUN GET VENDOR...');
+            $outputText = $this->getDriveFileTextContent($pdfUrl);
+            $client = new openAIClient();
+            $output = $client->getVendorNameAddressBasedTextContent($outputText);
+            $json = json_decode($output, true);
+            $billerName = $json['biller_name'] ?? null;
+            $billerAddress = $json['biller_address'] ?? null;
+            $vendorAptlyId = '';
+            $vendorName = '';
+            foreach ($this->vendors as $vendorItem) {
+                $name = $vendorItem['Title'] ?? '';
+                if (!$name) { continue; }
+                $match = $this->names_loose_match($billerName, $name);
+                if ($match) {
+                    Logger::warning('Test names match: ' . $billerName . " - " . $name . ' There is a MATCH? ' . json_encode($match));
+                }
+                if ($match) {
+                    $vendorAptlyId = $vendorItem['Aptly ID'];
+                    $vendorName = $vendorItem['Vendor name'];
+                    break;
+                }
+            }
+            Logger::warning('Updating with vendor ID:  ' . $vendorAptlyId);
+            $vendorAptlyId = trim($vendorAptlyId);
+            if ($vendorAptlyId) {
+                $aptly = new AptlyAPI();
+                $aptly->updateCardData($data['data']['_id'], [
+                    'VENDOR' => $vendorAptlyId
+                ]);
+            }
+        }
+    }
+
     function getGoogleDriveDownloadUrl($shareUrl) {
         if (preg_match('/\/d\/(.*?)\//', $shareUrl, $matches)) {
             return 'https://drive.google.com/uc?export=download&id=' . $matches[1];
         }
         return false;
+    }
+
+    /**
+     * @param $driveUrl1
+     * @return array
+     * @throws \ImagickException
+     */
+    private function getDriveFileTextContent($driveUrl1): string
+    {
+        $downloadUrl = $this->getGoogleDriveDownloadUrl($driveUrl1);
+        Logger::warning('Download URL: ' . $downloadUrl);
+        $uid = uniqid();
+        $pdfPath = __DIR__ . "/temp.$uid.pdf";
+        $imagePath = __DIR__ . "/page.$uid.jpg";
+        $ocrOutputPath = __DIR__ . "/ocr_output.$uid";
+
+        // 1. Download the PDF
+        file_put_contents($pdfPath, file_get_contents($downloadUrl));
+
+        // 2. Convert first page to image
+        $imagick = new Imagick();
+        $imagick->setResolution(300, 300); // High resolution for better OCR
+        Logger::warning('Looking for the file: ' . $pdfPath);
+        $imagick->readImage($pdfPath . '[0]'); // First page only
+
+        $imagick->setImageBackgroundColor('white');
+        $imagick = $imagick->mergeImageLayers(Imagick::LAYERMETHOD_FLATTEN);
+
+        $imagick->setImageFormat('jpeg');
+        $imagick->writeImage($imagePath);
+        exec("chmod 644 $imagePath");
+
+        // 3. Run Tesseract OCR
+        exec("tesseract " . escapeshellarg($imagePath) . " " . escapeshellarg($ocrOutputPath));
+
+        $outputText = file_get_contents("$ocrOutputPath.txt");
+        exec("rm -rf " . escapeshellarg($pdfPath) . " " . escapeshellarg($imagePath) . " " . escapeshellarg("$ocrOutputPath.txt"));
+        return $outputText;
+    }
+
+    function normalize_name($string) {
+        $string = strtolower($string); // lowercase
+        $string = preg_replace('/[^\p{L}\p{N}\s]/u', '', $string); // remove punctuation
+
+        // Normalize common business abbreviations
+        $abbreviations = [
+            'co' => 'company',
+            'co.' => 'company',
+            'corp' => 'corporation',
+            'corp.' => 'corporation',
+            'inc' => 'incorporated',
+            'inc.' => 'incorporated',
+            'ltd' => 'limited',
+            'ltd.' => 'limited',
+            'llc' => '',
+        ];
+
+        foreach ($abbreviations as $abbr => $full) {
+            $string = str_ireplace($abbr, $full, $string);
+        }
+
+        // Tokenize and normalize
+        $words = preg_split('/\s+/', $string);
+        $words = array_filter($words);
+        $words = array_unique($words);
+        sort($words);
+
+        return $words;
+    }
+
+    function names_loose_match($name1, $name2) {
+        $words1 = $this->normalize_name($name1);
+        $words2 = $this->normalize_name($name2);
+
+        // Check if all words in name1 are found in name2
+        return empty(array_diff($words1, $words2)) || empty(array_diff($words2, $words1));
     }
 }

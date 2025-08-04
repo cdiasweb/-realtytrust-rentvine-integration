@@ -114,7 +114,7 @@ $routes = [
         },
         '/getUnitFromPdf' => function () use ($rentvine) {
             $data = getJsonBody();
-            echo $rentvine->handleGetDriveFileTextContent($data);
+            echo $rentvine->getUnitsFromDriveFile($data);
         }
     ],
     'DELETE' => [

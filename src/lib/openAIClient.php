@@ -186,6 +186,62 @@ class openAIClient
         return $clean;
     }
 
+    public function getVendorNameAddressBasedTextContent($searchText)
+    {
+        $cacheKey = str_replace(' ', '', $searchText);
+        $cacheKey = "cache_" . md5($cacheKey);
+        $cacheResponse = $this->redisClient->redis->get($cacheKey);
+        if (!empty($cacheResponse)) {
+            $cacheResponse = json_decode($cacheResponse, true);
+            $cacheResponse['from_cache'] = true;
+            return json_encode($cacheResponse);
+        }
+        $unitResponse = $this->client->threads()->createAndRun(
+            [
+                'assistant_id' => 'asst_MDkJdiCS7ijWyWOk7X8EdtF4',
+                'thread' => [
+                    'messages' =>
+                        [
+                            [
+                                'role' => 'user',
+                                'content' => "$searchText",
+                            ],
+                        ],
+                ],
+            ],
+        );
+
+        $runId = $unitResponse['id'];
+        $threadId = $unitResponse['thread_id'];
+
+        do {
+            sleep(1); // wait 1 second
+            $runStatus = $this->client->threads()->runs()->retrieve($threadId, $runId);
+        } while ($runStatus['status'] !== 'completed');
+
+        $messages = $this->client->threads()->messages()->list($threadId);
+
+        $response = '';
+        foreach ($messages['data'] as $message) {
+            if ($message['role'] === 'user') {
+                continue;
+            }
+            $content = $message['content'][0]['text']['value'];
+            Logger::warning("Find by address: $searchText, message: " . json_encode($message));
+            $response .= $content;
+        }
+
+        // Remove JSON triple backticks
+        $clean = preg_replace('/^```(?:json)?|```$/m', '', $response);
+        $clean = trim($clean);
+        Logger::warning('CLEAN: ' . $clean);
+        if ($clean !== '') {
+            $this->redisClient->redis->set($cacheKey, $clean);
+        }
+
+        return $clean;
+    }
+
     function isJson($string) {
         json_decode($string);
         return (json_last_error() === JSON_ERROR_NONE);
