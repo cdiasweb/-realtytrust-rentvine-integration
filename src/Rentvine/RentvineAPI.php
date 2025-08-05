@@ -21,6 +21,7 @@ class RentvineAPI
     public const UNIT_FIELD = 'RPYgwSp52dD4tBbrN';
     public const UNIT_MULTIPLE_FIELD = 'XA8oZNqj5hY2NFJSN';
     public const VENDOR_FIELD = 'zGDJ4kpm2Xd54Rqnc';
+    public const RAW_DOC_CONTENT_FIELD = 'B9LfuWzKunhanRdCv';
 
     public $units = [];
     public $vendors = [];
@@ -353,8 +354,8 @@ class RentvineAPI
         if (!$urlToPdf || $attachToPropertyAction !== AptlyAPI::ATTACH_TO_PROPERTY_VALUE) {
             return;
         }
-        Logger::warning('Handle Building attachment: ' . json_encode($event));
-        Logger::warning('Object event: ' . $eventObject->action ?? $eventObject->action ?? '');
+        //Logger::warning('Handle Building attachment: ' . json_encode($event));
+        //Logger::warning('Object event: ' . $eventObject->action ?? $eventObject->action ?? '');
 
         $aptly = new AptlyAPI();
         if ($eventObject->action === 'update') {
@@ -685,6 +686,7 @@ class RentvineAPI
                     ]);
                     Logger::warning('$updateResult MULTIPLE: ' . json_encode($updateResult));
                 } else {
+                    Logger::warning('Unique units find: ' . json_encode($units));
                     $unitOption = $units[0];
                     $aptly = new AptlyAPI();
                     Logger::warning('UPDATE UNIQUE: ' . json_encode($unitOption));
@@ -706,10 +708,12 @@ class RentvineAPI
         Logger::warning('handleGetVendor: START...');
         $vendor = $data['data'][self::VENDOR_FIELD] ?? [];
         $pdfUrl = $data['data'][AptlyAPI::URL_TO_PDF_FIELD] ?? '';
+        $textRawOfDocument = $data['data'][self::RAW_DOC_CONTENT_FIELD];
         Logger::warning('$vendor: ' . json_encode($vendor));
         if (empty($vendor) && $pdfUrl) {
             Logger::warning('RUN GET VENDOR...');
-            $outputText = $this->getDriveFileTextContent($pdfUrl);
+            Logger::warning('Using raw text of document: ' . json_encode(!empty($textRawOfDocument)));
+            $outputText = $textRawOfDocument ?? $this->getDriveFileTextContent($pdfUrl);
             $client = new openAIClient();
             $output = $client->getVendorNameAddressBasedTextContent($outputText);
             $json = json_decode($output, true);
@@ -717,6 +721,7 @@ class RentvineAPI
             $billerAddress = $json['biller_address'] ?? null;
             $vendorAptlyId = '';
             $vendorName = '';
+            Logger::warning('Looking for vendor name: ' . $billerName);
             foreach ($this->vendors as $vendorItem) {
                 $name = $vendorItem['Title'] ?? '';
                 if (!$name) { continue; }
@@ -726,13 +731,13 @@ class RentvineAPI
                 }
                 if ($match) {
                     $vendorAptlyId = $vendorItem['Aptly ID'];
-                    $vendorName = $vendorItem['Vendor name'];
                     break;
                 }
             }
-            Logger::warning('Updating with vendor ID:  ' . $vendorAptlyId);
-            $vendorAptlyId = trim($vendorAptlyId);
+
             if ($vendorAptlyId) {
+                $vendorAptlyId = trim($vendorAptlyId);
+                Logger::warning('Updating with vendor ID:  ' . $vendorAptlyId);
                 $aptly = new AptlyAPI();
                 $aptly->updateCardData($data['data']['_id'], [
                     'VENDOR' => $vendorAptlyId

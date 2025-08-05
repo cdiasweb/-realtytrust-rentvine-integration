@@ -56,7 +56,7 @@ class openAIClient
                 continue;
             }
             $content = $message['content'][0]['text']['value'];
-            Logger::warning("Find by address: $address, message: " . json_encode($message));
+            //Logger::warning("Find by address: $address, message: " . json_encode($message));
             if ($this->isJson($content)) {
                 $response .= $content;
             }
@@ -170,7 +170,7 @@ class openAIClient
                 continue;
             }
             $content = $message['content'][0]['text']['value'];
-            Logger::warning("Find by address: $searchText, message: " . json_encode($message));
+            // Logger::warning("Find by address: $searchText, message: " . json_encode($message));
             if ($this->isJson($content)) {
                 $response .= $content;
             }
@@ -227,7 +227,7 @@ class openAIClient
                 continue;
             }
             $content = $message['content'][0]['text']['value'];
-            Logger::warning("Find by address: $searchText, message: " . json_encode($message));
+            //Logger::warning("Find by address: $searchText, message: " . json_encode($message));
             $response .= $content;
         }
 
