@@ -13,6 +13,7 @@ $requestMethod = $_SERVER['REQUEST_METHOD'];
 $userName = '221a34acd58d40138ddfbf9ba18ce2cf';
 $password = '64024e6e27a940358794c7c413887aae';
 $rentvine = new RentvineAPI($userName, $password);
+$aptly = new AptlyAPI();
 
 header('Content-Type: application/json');
 
@@ -66,6 +67,9 @@ $routes = [
 
             header("Content-Type: text/html");
             echo '<script>window.close()</script> <button onclick="window.close()">Close Tab</button>';
+        },
+        '/find-work-order-by-number/{workOrder}' => function ($workOrder) use ($aptly) {
+            echo $aptly->getWorkOrderFromNumber($workOrder);
         }
     ],
     'POST' => [

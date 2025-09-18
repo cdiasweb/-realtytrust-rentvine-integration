@@ -186,6 +186,62 @@ class openAIClient
         return $clean;
     }
 
+    public function getWorkOrderNumberFromText($searchText)
+    {
+        $cacheKey = str_replace(' ', '', $searchText);
+        $cacheResponse = $this->redisClient->redis->get($cacheKey);
+        if (!empty($cacheResponse)) {
+            $cacheResponse = json_decode($cacheResponse, true);
+            $cacheResponse['from_cache'] = true;
+            return json_encode($cacheResponse);
+        }
+        $unitResponse = $this->client->threads()->createAndRun(
+            [
+                'assistant_id' => 'asst_mwyqdXLxV0EOMYPKYaPG9Syq',
+                'thread' => [
+                    'messages' =>
+                        [
+                            [
+                                'role' => 'user',
+                                'content' => "What is the work order number in this text? $searchText",
+                            ],
+                        ],
+                ],
+            ],
+        );
+
+        $runId = $unitResponse['id'];
+        $threadId = $unitResponse['thread_id'];
+
+        do {
+            sleep(1); // wait 1 second
+            $runStatus = $this->client->threads()->runs()->retrieve($threadId, $runId);
+        } while ($runStatus['status'] !== 'completed');
+
+        $messages = $this->client->threads()->messages()->list($threadId);
+
+        $response = '';
+        foreach ($messages['data'] as $message) {
+            if ($message['role'] === 'user') {
+                continue;
+            }
+            $content = $message['content'][0]['text']['value'];
+            // Logger::warning("Find by address: $searchText, message: " . json_encode($message));
+            if ($this->isJson($content)) {
+                $response .= $content;
+            }
+        }
+
+        // Remove JSON triple backticks
+        $clean = preg_replace('/^```(?:json)?|```$/m', '', $response);
+        $clean = trim($clean);
+        if ($clean !== '') {
+            $this->redisClient->redis->set($cacheKey, $clean);
+        }
+
+        return $clean;
+    }
+
     public function getVendorNameAddressBasedTextContent($searchText)
     {
         $cacheKey = str_replace(' ', '', $searchText);

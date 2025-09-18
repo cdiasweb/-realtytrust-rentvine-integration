@@ -41,8 +41,8 @@ class AptlyAPI
         $this->apiBaseUrl = $apiBaseUrl;
     }
 
-    public function makeAptlyApiRequest($endpoint = '', $method = 'GET', $data = [], $useApiSubdomain = false) {
-        $url = $useApiSubdomain ? $this->apiBaseUrl : $this->baseUrl . $endpoint . "?x-token=" . $this->token;
+    public function makeAptlyApiRequest($endpoint = '', $method = 'GET', $data = [], $useApiSubdomain = false, $pathParameters = '') {
+        $url = ($useApiSubdomain ? $this->apiBaseUrl : $this->baseUrl) . $endpoint . "?x-token=" . $this->token . "&$pathParameters";
         Logger::warning('makeAptlyApiRequest URL: '. $url);
         $httpHeaders = $headers ?? [
             'Content-Type: application/json'
@@ -112,6 +112,28 @@ class AptlyAPI
 
         return $this->makeAptlyApiRequest("/api/card/$cardId", "GET", []);
     }
+
+    public function getWorkOrderFromNumber($workOrderNumber)
+    {
+        if (!$workOrderNumber) {
+            return null;
+        }
+
+        $result = $this->makeAptlyApiRequest("/api/aptlet/o8FBq4pe5dcsNTGkj", 'GET', [], true, "page=1");
+        $result = json_decode($result, true);
+        if ($result) {
+            foreach ($result['data'] as $workOrder) {
+                if ($workOrder['Work Order Number'] ?? '' == $workOrderNumber) {
+                    return json_encode($workOrder);
+                }
+
+            }
+        }
+
+        return null;
+    }
+
+
 
     public function updateCardFieldByCardId($cardId, $field) {
         return $this->makeAptlyApiRequest("/api/card/$cardId/fields/$field", "PUT");
