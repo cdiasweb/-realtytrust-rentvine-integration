@@ -151,15 +151,11 @@ class RentvineAPI
     public function loadVendors()
     {
         $filePath = __DIR__ . '/vendors.json';
-        Logger::warning('Loading vendors from: ' . $filePath);
 
-        // Load file content
         $jsonString = file_get_contents($filePath);
 
-        // Decode JSON into PHP array or object
-        $data = json_decode($jsonString, true); // true = associative array
+        $data = json_decode($jsonString, true);
 
-        // Optional: handle error
         if (json_last_error() !== JSON_ERROR_NONE) {
             throw new Exception('Invalid JSON: ' . json_last_error_msg());
         }
@@ -295,14 +291,6 @@ class RentvineAPI
     public function handleWebhook($data)
     {
         $webhookEventInfo = 'Webhook Received: ' . json_encode($data);
-        /*Logger::warning($webhookEventInfo);*/
-
-        /*foreach($data['changes'] as $change) {
-            if ($change['field'] === 'name') {
-                Logger::warning('Do not run it.');
-                return;
-            }
-        }*/
 
         Logger::warning('Run it.');
 
@@ -563,7 +551,8 @@ class RentvineAPI
     public function findUnitInJson($data)
     {
         $searchText = $data['searchText'] ?? '';
-        $json = file_get_contents('units.json');
+        $jsonPath = __DIR__ . '/units.json';
+        $json = file_get_contents($jsonPath);
         $data = json_decode($json, true);
 
         // Prepare search words
@@ -685,7 +674,7 @@ class RentvineAPI
                         'Unit multiple found' => $unitOptions
                     ]);
                     Logger::warning('$updateResult MULTIPLE: ' . json_encode($updateResult));
-                } else {
+                } else if (count($units) === 1) {
                     Logger::warning('Unique units find: ' . json_encode($units));
                     $unitOption = $units[0];
                     $aptly = new AptlyAPI();
@@ -827,5 +816,12 @@ class RentvineAPI
 
         // Check if all words in name1 are found in name2
         return empty(array_diff($words1, $words2)) || empty(array_diff($words2, $words1));
+    }
+
+    public function findWorkOrderNumberFromText($data)
+    {
+        $client = new openAIClient();
+        $searchText = $data['searchText'] ?? '';
+        return $client->getWorkOrderNumberFromText($searchText);
     }
 }
