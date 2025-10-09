@@ -571,7 +571,7 @@ class RentvineAPI
         });
 
         if (!empty($filtered)) {
-            echo json_encode($filtered);
+            echo json_encode(array_values($filtered));
         } else {
             echo "Not found.";
         }
