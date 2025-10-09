@@ -559,7 +559,7 @@ class RentvineAPI
         $searchWords = array_filter(explode(' ', strtolower($searchText)));
 
         $filtered = array_filter($data, function($item) use ($searchWords) {
-            $target = strtolower($item['unit']['name']);
+            $target = strtolower($item['Title']);
 
             // Check if all search words are in the target string
             foreach ($searchWords as $word) {
