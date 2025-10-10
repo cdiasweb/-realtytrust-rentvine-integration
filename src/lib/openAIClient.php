@@ -74,7 +74,6 @@ class openAIClient
 
     public function getAddressesFromText($textContent)
     {
-        Logger::warning('Running getAddressesFromText...');
         $cacheKey = str_replace(' ', '', $textContent);
         $cacheResponse = $this->redisClient->redis->get($cacheKey);
         if (!empty($cacheResponse)) {
@@ -106,7 +105,6 @@ class openAIClient
         } while ($runStatus['status'] !== 'completed');
 
         $messages = $this->client->threads()->messages()->list($threadId);
-        //Logger::warning('Messages: ' . json_encode($messages));
 
         $response = '';
         foreach ($messages['data'] as $message) {
@@ -114,7 +112,6 @@ class openAIClient
                 continue;
             }
             $content = $message['content'][0]['text']['value'];
-            //Logger::warning("Response: " . json_encode($message));
             if ($this->isJson($content)) {
                 $response .= $content;
             }
@@ -158,7 +155,7 @@ class openAIClient
         $threadId = $unitResponse['thread_id'];
 
         do {
-            sleep(1); // wait 1 second
+            sleep(1);
             $runStatus = $this->client->threads()->runs()->retrieve($threadId, $runId);
         } while ($runStatus['status'] !== 'completed');
 
@@ -170,7 +167,6 @@ class openAIClient
                 continue;
             }
             $content = $message['content'][0]['text']['value'];
-            // Logger::warning("Find by address: $searchText, message: " . json_encode($message));
             if ($this->isJson($content)) {
                 $response .= $content;
             }
@@ -214,7 +210,7 @@ class openAIClient
         $threadId = $unitResponse['thread_id'];
 
         do {
-            sleep(1); // wait 1 second
+            sleep(1);
             $runStatus = $this->client->threads()->runs()->retrieve($threadId, $runId);
         } while ($runStatus['status'] !== 'completed');
 
@@ -226,7 +222,6 @@ class openAIClient
                 continue;
             }
             $content = $message['content'][0]['text']['value'];
-            // Logger::warning("Find by address: $searchText, message: " . json_encode($message));
             if ($this->isJson($content)) {
                 $response .= $content;
             }
@@ -271,7 +266,7 @@ class openAIClient
         $threadId = $unitResponse['thread_id'];
 
         do {
-            sleep(1); // wait 1 second
+            sleep(1);
             $runStatus = $this->client->threads()->runs()->retrieve($threadId, $runId);
         } while ($runStatus['status'] !== 'completed');
 
@@ -283,14 +278,12 @@ class openAIClient
                 continue;
             }
             $content = $message['content'][0]['text']['value'];
-            //Logger::warning("Find by address: $searchText, message: " . json_encode($message));
             $response .= $content;
         }
 
         // Remove JSON triple backticks
         $clean = preg_replace('/^```(?:json)?|```$/m', '', $response);
         $clean = trim($clean);
-        Logger::warning('CLEAN: ' . $clean);
         if ($clean !== '') {
             $this->redisClient->redis->set($cacheKey, $clean);
         }

@@ -132,7 +132,6 @@ class RentvineAPI
     public function loadUnits()
     {
         $filePath = __DIR__ . '/units.json';
-        Logger::warning('Loading units from: ' . $filePath);
 
         // Load file content
         $jsonString = file_get_contents($filePath);
@@ -165,11 +164,9 @@ class RentvineAPI
 
     public function getUnitFromNumberAndStreetAddress($address)
     {
-        Logger::warning('getUnitFromNumberAndStreetAddress: ' . $address);
         if (!empty($this->units)) {
             foreach ($this->units as $unit) {
                 if (str_starts_with(strtolower($unit['Title']), strtolower($address))) {
-                    Logger::warning('UNIT found');
                     return $unit;
                 }
             }
@@ -191,7 +188,6 @@ class RentvineAPI
 
     public function linkUnitIdToCard($unitId, $cardId)
     {
-        Logger::warning('linkUnitIdToCard $unitId: ' . $unitId . ' $cardId: ' . $cardId);
         $aptly = new AptlyAPI();
         $unitData = $aptly->getCardById($unitId);
         $unitCard = json_decode($unitData, true);
@@ -199,8 +195,6 @@ class RentvineAPI
         $result = $aptly->updateCardData($cardId, [
             'UNIT' => $unitId
         ]);
-        Logger::warning('$unitCardData: ' . json_encode($unitCardData));
-        Logger::warning('Unit FIELD update result: ' . $result);
 
         header("Content-Type: text/html");
         echo '<script>window.close()</script> <button onclick="window.close()">Close Tab</button>';
@@ -250,7 +244,6 @@ class RentvineAPI
 
     public function getPortfolioByIdIncludingOwners($portfolioId)
     {
-        Logger::warning('Portfolio ID: ' . $portfolioId);
         $endpoint = "/manager/portfolios/$portfolioId?includes=owners,properties,posting,statementSetting,ledger";
         return $this->makeRequest($endpoint);
     }
@@ -278,7 +271,6 @@ class RentvineAPI
     public function addAttachmentToObject($objectId, $objectTypeId, $files)
     {
         $endpoint = "/manager/files?objectTypeID=$objectTypeId&objectID=$objectId";
-        Logger::warning('addAttachmentToObject: ' . $endpoint);
         return $this->makeFilePostRequest($endpoint, $files);
     }
 
@@ -291,8 +283,6 @@ class RentvineAPI
     public function handleWebhook($data)
     {
         $webhookEventInfo = 'Webhook Received: ' . json_encode($data);
-
-        Logger::warning('Run it.');
 
         // Handle events
         $this->handleBuildingAttachment($data);
@@ -342,30 +332,21 @@ class RentvineAPI
         if (!$urlToPdf || $attachToPropertyAction !== AptlyAPI::ATTACH_TO_PROPERTY_VALUE) {
             return;
         }
-        //Logger::warning('Handle Building attachment: ' . json_encode($event));
-        //Logger::warning('Object event: ' . $eventObject->action ?? $eventObject->action ?? '');
 
         $aptly = new AptlyAPI();
         if ($eventObject->action === 'update') {
             $fieldId = $aptly->getFieldIdFromAptlyEventWithKeyName($eventObject, AptlyAPI::buildingEventKey);
-            Logger::warning('FIELD ID: ' . $fieldId);
             $buildingRentvineCardId = $aptly->getBuildingCardIdFromAptlyEventByFieldId($eventObject, $fieldId);
-            Logger::warning('BUILDING RENTVINE CARD ID: ' . $buildingRentvineCardId);
             if ($buildingRentvineCardId) {
                 $buildingRentvineId = $aptly->getBuildingRentvineIdFromCard($buildingRentvineCardId);
-                Logger::warning('BUILDING RENTVINE ID: ' . $buildingRentvineId);
 
                 $propertyDetails = $this->getProperty($buildingRentvineId);
-                Logger::warning('PROPERTY DETAILS: ' . $propertyDetails);
 
                 $attachmentsFieldId = $aptly->getFieldIdFromAptlyEventWithKeyName($eventObject, self::RENTVINE_DOC_UPLOAD_FIELD);
-                Logger::warning('Attachments FIELD ID: ' . $attachmentsFieldId);
 
                 $drivePdfFileLink = $aptly->getCompleteFieldDataByFieldIdFromData($eventObject, AptlyAPI::URL_TO_PDF_FIELD);
-                Logger::warning('$drivePdfFileLink' . json_encode($drivePdfFileLink));
 
                 $attachToBuildingAction = $aptly->getCompleteFieldDataByFieldIdFromChanges($eventObject, AptlyAPI::ATTACH_RV_PROPERTY_FIELD);
-                Logger::warning('$attachToBuildingAction: ' . $attachToBuildingAction);
                 if ($attachToBuildingAction !== AptlyAPI::ATTACH_TO_PROPERTY_VALUE) {
                     Logger::warning('Do not attach file to property.');
                     return;
@@ -376,23 +357,19 @@ class RentvineAPI
                 $objectTypeId = 6;
                 // Check if we have units
                 $units = $this->searchUnitsByPropertyId($buildingRentvineId);
-                //Logger::warning("units found: $units");
                 $units = json_decode($units, true);
                 if (count($units) === 1) {
                     $buildingRentvineId = $units[0]['unit']['unitID'] ?? $buildingRentvineId;
                     $objectTypeId = $units[0]['unit']['unitID'] ? 7 : 6;
-                    Logger::warning('$buildingRentvineId UNITS: ' . $buildingRentvineId);
                 }
 
                 $fileUploadedData = $this->addAttachmentToObject($buildingRentvineId, $objectTypeId, $_FILES);
-                Logger::warning('$fileUploadedData: ' . $fileUploadedData);
 
                 // Set the result to card
                 $updateFeedbackResult = $aptly->updateCardData($eventObject->data['_id'] ?? null, [
                     AptlyAPI::RV_APTLY_FIELD_NAME => 'Document attached to Property',
                     AptlyAPI::RV_APTLY_ACTION_FIELD_NAME => 'Attached to property'
                 ]);
-                Logger::warning('$updateFeedbackResult: ' . $updateFeedbackResult);
             }
         }
     }
@@ -410,27 +387,20 @@ class RentvineAPI
         $aptlyApi = new AptlyAPI();
         $leaseCard = $aptlyApi->getCardById($leaseCardId);
         $cardData = json_decode($leaseCard, true);
-        Logger::warning('$leaseCard: ' . json_encode($cardData));
         $leaseRvId = $cardData['message']['data']['message']['data'][AptlyAPI::RENTVINE_ID_KEY] ?? null;
-        Logger::warning('$leaseRvId: ' . $leaseRvId);
-
         $drivePdfFileLink = $aptlyApi->getCompleteFieldDataByFieldIdFromData($eventObject, AptlyAPI::URL_TO_PDF_FIELD);
-        Logger::warning('$drivePdfFileLink' . json_encode($drivePdfFileLink));
 
         $this->createFilePostObject($drivePdfFileLink, $eventObject);
 
         // Object type id: 4
         $fileUploadedData = $this->addAttachmentToObject($leaseRvId, 4, $_FILES);
         $fileUploadedData = json_decode($fileUploadedData, true);
-        Logger::warning('Lease file upload result: ' . json_encode($fileUploadedData));
 
         // Share with tenant if applicable
         $fileAttachmentId = $fileUploadedData['fileAttachment']['fileAttachmentID'] ?? null;
-        Logger::warning('$fileAttachmentId: ' . $fileAttachmentId);
         if ($fileAttachmentId) {
             $shareWithTenant = !($shareWithTenant === 'False');
             $shareFileResult = $this->shareFile($fileAttachmentId, $shareWithTenant);
-            Logger::warning('$shareFileResult: ' . $shareFileResult);
         }
 
         // Set the result to card
@@ -439,13 +409,11 @@ class RentvineAPI
             AptlyAPI::ATTACH_TO_RV_LEASE_RESULT => 'Document attached to Lease'
 
         ]);
-        Logger::warning('$updateFeedbackResult: ' . $updateFeedbackResult);
     }
 
     public function createFilePostObject($drivePdfFileLink, $eventObject) {
         $aptly = new AptlyAPI();
         $googleDriveFileId = $aptly->extractGoogleDriveFileId($drivePdfFileLink);
-        Logger::warning('$googleDriveFileId: ' . $googleDriveFileId);
         if (!$googleDriveFileId) {
             Logger::warning("Could not find the File ID for this URL: $drivePdfFileLink");
             return;
@@ -455,7 +423,6 @@ class RentvineAPI
 
         $fileName = $eventObject->data[AptlyAPI::SUMMARY_FIELD] ?? basename($tempPath);
         $fileName = $aptly->sanitizeFileName($fileName);
-        Logger::warning('$fileName: ' . $fileName);
         // Step 2: Mock the $_FILES array
         $_FILES['file'] = [
             'name' => $fileName,
@@ -471,10 +438,8 @@ class RentvineAPI
         $eventObject = (object) $event;
         $postOwnerBillAction = $eventObject->data[AptlyAPI::POST_TO_OWNER_PORTFOLIO_FIELD] ?? null;
         $portfolioCardId = $eventObject->data[AptlyAPI::PORTFOLIO_FIELD][0]['_id'] ?? null;
-        //Logger::warning('Portfolio Card ID: ' . json_encode($portfolioCardId));
         $aptly = new AptlyAPI();
         $portfolioCard = $aptly->getCardById($portfolioCardId);
-        //Logger::warning('$portfolioCard: ' . $portfolioCard);
 
         if (!$portfolioCard) {
             return;
@@ -482,11 +447,8 @@ class RentvineAPI
 
         $portfolioCard = json_decode($portfolioCard, true);
         $portfolioRvId = $portfolioCard['message']['data']['message']['data'][AptlyAPI::RENTVINE_ID_KEY] ?? null;
-        //Logger::warning('$portfolioCard: ' . json_encode($portfolioCard));
-        //Logger::warning('$portfolioRvId: ' . $portfolioRvId);
         $rentvinePortfolioData = $this->getPortfolioByIdIncludingOwners($portfolioRvId);
         $rentvinePortfolioData = json_decode($rentvinePortfolioData, true);
-        //Logger::warning('$rentvinePortfolioData: ' . json_encode($rentvinePortfolioData));
         $ownerContactId = $rentvinePortfolioData['owners'][0]['owner']['contactID'] ?? null;
         $ledgerId = $rentvinePortfolioData['ledger']['ledgerID'] ?? null;
 
@@ -515,17 +477,13 @@ class RentvineAPI
             "leaseCharges" => [],
             "reference" => "Bill from Aptly."
         ];
-        Logger::warning('RUN handlePostOwnerBillToPortfolio: ' . json_encode($billData));
 
-        Logger::warning('Bill data: ' . json_encode($billData));
         $result = $this->createOwnerPortfolioBill($billData);
-        Logger::warning('$result: ' . json_encode($result));
 
         $cardId = $eventObject->data['_id'];
         $updateCardResult = $aptly->updateCardData($cardId, [
             AptlyAPI::BILL_TO_OWNER_RESULT => "Bill added to portfolio owner."
         ]);
-        Logger::warning('$updateCardResult: ' . $updateCardResult);
     }
 
     public function shareFile($fileAttachmentId, $isSharedWithTenant = false, $isSharedWithOwner = false, $sendNotification = false) {
@@ -603,13 +561,11 @@ class RentvineAPI
     {
         $eventObject = (object) $event;
         $changes = $eventObject->changes ?? null;
-        Logger::warning('Changes: ' . json_encode($changes));
         if (!$changes || $changes[0]['field'] !== 'description') {
             return;
         }
 
         $propertyAddress = $this->getPropertyAddressFromDescription($changes[0]['value']);
-        Logger::warning('Property address: ' . $propertyAddress);
     }
 
     function getUnitsFromDriveFile($driveUrl)
@@ -635,20 +591,17 @@ class RentvineAPI
                 ];
             }
         }
-        Logger::warning('$aptlyIds: ' . json_encode($aptlyIds));
 
         return json_encode($aptlyIds);
     }
 
     function handleGetUnitFromPDF($data, $force = false) {
         try {
-            Logger::warning('handleGetUnitFromPDF: START...');
             $unit = $data['data'][self::UNIT_FIELD] ?? [];
             $multipleUnit = $data['data'][self::UNIT_MULTIPLE_FIELD] ?? '';
             $pdfUrl = $data['data'][AptlyAPI::URL_TO_PDF_FIELD] ?? '';
             if (empty($unit) && empty($multipleUnit) && $pdfUrl || $force) {
                 $units = $this->getUnitsFromDriveFile(['driveUrl' => $pdfUrl]);
-                Logger::warning('$units: ' . json_encode($units));
                 if (is_string($units)) {
                     $units = json_decode($units, true);
                 }
@@ -669,7 +622,6 @@ class RentvineAPI
                         $unitOptions .= "<a href='$link'>Link Unit to Card</a>" . "<br><br>";
                     }
                     $aptly = new AptlyAPI();
-                    Logger::warning('UPDATE MULTIPLE: ' . json_encode($unitOptions));
                     $updateResult = $aptly->updateCardData($data['data']['_id'], [
                         'Unit multiple found' => $unitOptions
                     ]);
@@ -678,13 +630,10 @@ class RentvineAPI
                     Logger::warning('Unique units find: ' . json_encode($units));
                     $unitOption = $units[0];
                     $aptly = new AptlyAPI();
-                    Logger::warning('UPDATE UNIQUE: ' . json_encode($unitOption));
-                    Logger::warning('UPDATE UNIT: ' . json_encode($units));
+
                     $updateResult = $aptly->updateCardData($data['data']['_id'], [
                         'Unit' => $unitOption['_id']
                     ]);
-
-                    Logger::warning('$updateResult: ' . json_encode($updateResult));
                 }
             }
         } catch (Throwable $exception) {
@@ -694,14 +643,10 @@ class RentvineAPI
 
     function handleGetVendor($data)
     {
-        Logger::warning('handleGetVendor: START...');
         $vendor = $data['data'][self::VENDOR_FIELD] ?? [];
         $pdfUrl = $data['data'][AptlyAPI::URL_TO_PDF_FIELD] ?? '';
         $textRawOfDocument = $data['data'][self::RAW_DOC_CONTENT_FIELD];
-        Logger::warning('$vendor: ' . json_encode($vendor));
         if (empty($vendor) && $pdfUrl) {
-            Logger::warning('RUN GET VENDOR...');
-            Logger::warning('Using raw text of document: ' . json_encode(!empty($textRawOfDocument)));
             $outputText = $textRawOfDocument ?? $this->getDriveFileTextContent($pdfUrl);
             $client = new openAIClient();
             $output = $client->getVendorNameAddressBasedTextContent($outputText);
@@ -710,7 +655,6 @@ class RentvineAPI
             $billerAddress = $json['biller_address'] ?? null;
             $vendorAptlyId = '';
             $vendorName = '';
-            Logger::warning('Looking for vendor name: ' . $billerName);
             foreach ($this->vendors as $vendorItem) {
                 $name = $vendorItem['Title'] ?? '';
                 if (!$name) { continue; }
@@ -726,7 +670,6 @@ class RentvineAPI
 
             if ($vendorAptlyId) {
                 $vendorAptlyId = trim($vendorAptlyId);
-                Logger::warning('Updating with vendor ID:  ' . $vendorAptlyId);
                 $aptly = new AptlyAPI();
                 $aptly->updateCardData($data['data']['_id'], [
                     'VENDOR' => $vendorAptlyId
@@ -762,7 +705,6 @@ class RentvineAPI
         // 2. Convert first page to image
         $imagick = new Imagick();
         $imagick->setResolution(300, 300); // High resolution for better OCR
-        Logger::warning('Looking for the file: ' . $pdfPath);
         $imagick->readImage($pdfPath . '[0]'); // First page only
 
         $imagick->setImageBackgroundColor('white');

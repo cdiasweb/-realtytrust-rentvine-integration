@@ -75,7 +75,6 @@ class AptlyAPI
 
     public function makeAptlyFileRequest($endpoint = '', $method = 'GET', $data = []) {
         $url = $this->baseUrl . $endpoint . "?x-token=" . $this->token;
-        Logger::warning('makeAptlyApiRequest URL: '. $url);
         $httpHeaders = $headers ?? [
             'Content-Type: application/json'
         ];
@@ -147,7 +146,6 @@ class AptlyAPI
 
         $cardData = $this->getCardById($cardId);
         $cardData = json_decode($cardData, true);
-        Logger::warning('CARD Data: ' . json_encode($cardData));
 
         if ($cardData['message']['data']['code'] === 200) {
             return $cardData['message']['data']['message']['data'][self::RENTVINE_ID_KEY] ?? null;
@@ -160,7 +158,6 @@ class AptlyAPI
             return $item['label'] === $keyName;
         });
         $buildingCard = reset($buildingCard);
-        Logger::warning('FOUND BUILDING CARD: ' . json_encode($buildingCard));
 
         return $buildingCard['key'] ?? null;
     }
@@ -171,7 +168,6 @@ class AptlyAPI
         }, ARRAY_FILTER_USE_BOTH);
 
         $data = reset($data);
-        Logger::warning('FOUND BUILDING CARD: ' . json_encode($data));
         if ($data) {
             return end($data)['_id'] ?? null;
         }
