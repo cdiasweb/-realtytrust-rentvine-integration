@@ -44,7 +44,7 @@ class openAIClient
         $threadId = $unitResponse['thread_id'];
 
         do {
-            sleep(1); // wait 1 second
+            sleep(1);
             $runStatus = $this->client->threads()->runs()->retrieve($threadId, $runId);
         } while ($runStatus['status'] !== 'completed');
 
@@ -56,7 +56,6 @@ class openAIClient
                 continue;
             }
             $content = $message['content'][0]['text']['value'];
-            //Logger::warning("Find by address: $address, message: " . json_encode($message));
             if ($this->isJson($content)) {
                 $response .= $content;
             }
@@ -100,7 +99,7 @@ class openAIClient
         $threadId = $unitResponse['thread_id'];
 
         do {
-            sleep(1); // wait 1 second
+            sleep(1);
             $runStatus = $this->client->threads()->runs()->retrieve($threadId, $runId);
         } while ($runStatus['status'] !== 'completed');
 
