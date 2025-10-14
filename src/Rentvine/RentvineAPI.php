@@ -224,9 +224,46 @@ class RentvineAPI
         return $this->makeRequest($endpoint, 'DELETE');
     }
 
+    /**
+     * @throws Exception
+     */
     public function createOwnerPortfolioBill($data)
     {
         $endpoint = "/manager/accounting/bills";
+
+        $unitId = $data['unitId'] ?? null;
+        $ledgerId = $data['charges']['ledgerID'] ?? null;
+        $leaseId = $data['charges'][0]['leaseID'] ?? null;
+        if ($unitId) {
+            if (!$leaseId) {
+                $leases = $this->findLeaseInJson("unitID", $unitId);
+                $leaseId = $leases[0]['lease']['leaseID'] ?? null;
+            }
+
+            // Find Unit
+            $units = $this->findUnitInJson(["unit_id" => $unitId]) ?? "[]";
+            $units = json_decode($units, true);
+            if ($units[0]) {
+                $unitTitle = $units[0]['Title'];
+                if ($unitTitle) {
+                    $ledgers = $this->searchLedgers(["name" => $unitTitle]);
+                    $ledgers = json_decode($ledgers, true);
+                    $ledgerId = $ledgers[0]["ledger"]["ledgerID"] ?? null;
+                    Logger::warning('Found ledger ID: ' . $ledgerId);
+                }
+            }
+        }
+
+        if (!$ledgerId) {
+            throw new Exception("Ledger ID not found");
+        }
+        Logger::warning('Using ledger id: ' . $ledgerId);
+        Logger::warning('Using lease id: ' . $leaseId);
+        unset($data['unitId']);
+
+        $data['charges'][0]['ledgerID'] = $ledgerId;
+        $data['charges'][0]['leaseID'] = $leaseId;
+
         return $this->makeRequest($endpoint, 'POST', $data);
     }
 
@@ -506,33 +543,51 @@ class RentvineAPI
         return "updated.";
     }
 
-    public function findUnitInJson($data)
+    public function findUnitInJson($data, $encodeJson = true)
     {
         $searchText = $data['searchText'] ?? '';
+        $unitId = $data['unit_id'] ?? '';
         $jsonPath = __DIR__ . '/units.json';
         $json = file_get_contents($jsonPath);
         $data = json_decode($json, true);
 
-        // Prepare search words
-        $searchWords = array_filter(explode(' ', strtolower($searchText)));
+        if ($unitId) {
+            $filtered = array_filter($data, function($item) use ($unitId) {
+                $target = strtolower($item['Rentvine ID']);
+                return $target == $unitId;
+            });
+        } else {
+            // Prepare search words
+            $searchWords = array_filter(explode(' ', strtolower($searchText)));
 
-        $filtered = array_filter($data, function($item) use ($searchWords) {
-            $target = strtolower($item['Title']);
+            $filtered = array_filter($data, function($item) use ($searchWords) {
+                $target = strtolower($item['Title']);
 
-            // Check if all search words are in the target string
-            foreach ($searchWords as $word) {
-                if (stripos($target, $word) === false) {
-                    return false;
+                // Check if all search words are in the target string
+                foreach ($searchWords as $word) {
+                    if (stripos($target, $word) === false) {
+                        return false;
+                    }
                 }
-            }
-            return true;
-        });
+                return true;
+            });
+        }
 
         if (!empty($filtered)) {
-            echo json_encode(array_values($filtered));
+            return json_encode(array_values($filtered));
         } else {
-            echo "Not found.";
+            return "Not found.";
         }
+    }
+
+    public function findLeaseInJson($field, $content)
+    {
+        $jsonPath = __DIR__ . '/leases.json';
+        $json = file_get_contents($jsonPath);
+        $data = json_decode($json, true);
+        return array_values(array_filter($data, function($item) use ($field, $content) {
+            return $item['lease'][$field] == $content;
+        }));
     }
 
     public function findUnitInJsonUsingAI($data)
