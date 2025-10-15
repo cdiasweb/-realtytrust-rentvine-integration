@@ -2,8 +2,6 @@
 
 namespace Aptly;
 
-use Rentvine\Logger;
-
 class AptlyAPI
 {
     private $baseUrl;
@@ -43,7 +41,6 @@ class AptlyAPI
 
     public function makeAptlyApiRequest($endpoint = '', $method = 'GET', $data = [], $useApiSubdomain = false, $pathParameters = '') {
         $url = ($useApiSubdomain ? $this->apiBaseUrl : $this->baseUrl) . $endpoint . "?x-token=" . $this->token . "&$pathParameters";
-        Logger::warning('makeAptlyApiRequest URL: '. $url);
         $httpHeaders = $headers ?? [
             'Content-Type: application/json'
         ];

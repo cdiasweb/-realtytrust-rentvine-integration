@@ -4,7 +4,6 @@ namespace lib;
 
 use OpenAI;
 use RedisCache\RedisClient;
-use Rentvine\Logger;
 use Util\Env;
 
 class openAIClient
