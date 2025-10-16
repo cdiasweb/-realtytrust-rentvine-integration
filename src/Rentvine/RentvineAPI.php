@@ -229,8 +229,8 @@ class RentvineAPI
      */
     public function createOwnerPortfolioBill($data)
     {
-        Logger::warning("createOwnerPortfolioBill" . $data);
-        
+        Logger::warning("createOwnerPortfolioBill" . json_encode($data));
+
         $endpoint = "/manager/accounting/bills";
 
         $unitId = $data['unitId'] ?? null;
