@@ -229,6 +229,8 @@ class RentvineAPI
      */
     public function createOwnerPortfolioBill($data)
     {
+        Logger::warning("createOwnerPortfolioBill" . $data);
+        
         $endpoint = "/manager/accounting/bills";
 
         $unitId = $data['unitId'] ?? null;
@@ -257,8 +259,7 @@ class RentvineAPI
         if (!$ledgerId) {
             throw new Exception("Ledger ID not found");
         }
-        Logger::warning('Using ledger id: ' . $ledgerId);
-        Logger::warning('Using lease id: ' . $leaseId);
+
         unset($data['unitId']);
 
         $data['charges'][0]['ledgerID'] = $ledgerId;
@@ -680,9 +681,7 @@ class RentvineAPI
                     $updateResult = $aptly->updateCardData($data['data']['_id'], [
                         'Unit multiple found' => $unitOptions
                     ]);
-                    Logger::warning('$updateResult MULTIPLE: ' . json_encode($updateResult));
                 } else if (count($units) === 1) {
-                    Logger::warning('Unique units find: ' . json_encode($units));
                     $unitOption = $units[0];
                     $aptly = new AptlyAPI();
 
@@ -748,7 +747,6 @@ class RentvineAPI
     private function getDriveFileTextContent($driveUrl1): string
     {
         $downloadUrl = $this->getGoogleDriveDownloadUrl($driveUrl1);
-        Logger::warning('Download URL: ' . $downloadUrl);
         $uid = uniqid();
         $pdfPath = __DIR__ . "/temp.$uid.pdf";
         $imagePath = __DIR__ . "/page.$uid.jpg";
