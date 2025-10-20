@@ -22,6 +22,7 @@ class RentvineAPI
     public const UNIT_MULTIPLE_FIELD = 'XA8oZNqj5hY2NFJSN';
     public const VENDOR_FIELD = 'zGDJ4kpm2Xd54Rqnc';
     public const RAW_DOC_CONTENT_FIELD = 'B9LfuWzKunhanRdCv';
+    public const ADDRESS_UNIT_MIRROR = 'XAjpmZSoGLccddEEN';
 
     public $units = [];
     public $vendors = [];
@@ -229,7 +230,9 @@ class RentvineAPI
      */
     public function createOwnerPortfolioBill($data)
     {
+
         Logger::warning("createOwnerPortfolioBill" . json_encode($data));
+        $data = $this->retrieveBillDataFromAutomation($data);
 
         $endpoint = "/manager/accounting/bills";
 
@@ -333,7 +336,9 @@ class RentvineAPI
         // Forward events
         $this->forwardWebhookEvent($data, self::MAKE_URL);
 
-        if (Env::isProd()) {
+        $isProd = Env::isProd();
+        Logger::warning("Is prod: $isProd");
+        if ($isProd) {
             $this->forwardWebhookEvent($data, self::NGROK_URL);
         } else {
             Logger::warning('Dev env: Do not forward webhook to ngrok.');
@@ -344,6 +349,7 @@ class RentvineAPI
 
     public function forwardWebhookEvent($data, $whUrl = null)
     {
+        Logger::warning("forwardWebhookEvent URL: $whUrl");
         if (!$whUrl) {
             return;
         }
@@ -818,5 +824,20 @@ class RentvineAPI
         $client = new openAIClient();
         $searchText = $data['searchText'] ?? '';
         return $client->getWorkOrderNumberFromText($searchText);
+    }
+
+    public function retrieveBillDataFromAutomation($payload)
+    {
+        $apiAction = $payload['action'] ?? '' == 'automation';
+        Logger::warning("retrieveBillDataFromAutomation $apiAction");
+        if ($apiAction) {
+            $unitAddress = $payload['data'][self::ADDRESS_UNIT_MIRROR] ?? '';
+            $unitAddress = trim(mb_substr($unitAddress, 0, 30, 'UTF-8'));
+            Logger::warning("retrieveBillDataFromAutomation lookup address $unitAddress");
+            $unitId = $this->getUnitFromNumberAndStreetAddress($unitAddress);
+            Logger::warning("retrieveBillDataFromAutomation unitId $unitId");
+        }
+
+        return $payload;
     }
 }
