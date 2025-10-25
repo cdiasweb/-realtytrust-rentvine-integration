@@ -9,7 +9,7 @@ class RedisClient
     public function __construct()
     {
         $this->redis = new \Redis();
-        $this->redis->connect('redis', 6379); // Connect to Redis service in Docker
+        $this->redis->connect('redis');
     }
     public function __call($name, $arguments)
     {

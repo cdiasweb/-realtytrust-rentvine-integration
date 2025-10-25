@@ -258,16 +258,12 @@ class AptlyAPI
     }
 
     public function sanitizeFileName($string) {
-        // Replace spaces and commas with underscores
         $string = str_replace([' ', ',', '$'], '_', $string);
 
-        // Remove any character that is not a letter, number, dash, or underscore
         $string = preg_replace('/[^A-Za-z0-9_\-\.]/', '', $string);
 
-        // Optionally, limit the filename length
         $string = substr($string, 0, 100);
 
-        // Lowercase (optional)
         $string = strtolower($string);
 
         return $string;

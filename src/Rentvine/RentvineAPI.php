@@ -24,6 +24,12 @@ class RentvineAPI
     public const RAW_DOC_CONTENT_FIELD = 'B9LfuWzKunhanRdCv';
     public const ADDRESS_UNIT_MIRROR = 'XAjpmZSoGLccddEEN';
 
+    public const BILL_DATE_KEY = "zjH7HeQ7RZv7G3Hjh";
+    public const BILL_DATE_DUE_KEY = "JRDXwkC4zq4yqL9zy";
+
+    public const BILL_DESCRIPTION_KEY = "k5Mj5r7nHiCjRGav7";
+    public const BILL_AMOUNT_KEY = "5a7PBd2u6aEvrgYxi";
+
     public $units = [];
     public $vendors = [];
 
@@ -59,7 +65,6 @@ class RentvineAPI
         }
 
         $response = curl_exec($curl);
-        $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
 
         if (curl_errno($curl)) {
             throw new Exception('CURL Error: ' . curl_error($curl));
@@ -190,10 +195,7 @@ class RentvineAPI
     public function linkUnitIdToCard($unitId, $cardId)
     {
         $aptly = new AptlyAPI();
-        $unitData = $aptly->getCardById($unitId);
-        $unitCard = json_decode($unitData, true);
-        $unitCardData = $unitCard['message']['data']['message']['data'] ?? null;
-        $result = $aptly->updateCardData($cardId, [
+        $aptly->updateCardData($cardId, [
             'UNIT' => $unitId
         ]);
 
@@ -230,10 +232,8 @@ class RentvineAPI
      */
     public function createOwnerPortfolioBill($data)
     {
-
         Logger::warning("createOwnerPortfolioBill" . json_encode($data));
         $data = $this->retrieveBillDataFromAutomation($data);
-
         $endpoint = "/manager/accounting/bills";
 
         $unitId = $data['unitId'] ?? null;
@@ -337,11 +337,11 @@ class RentvineAPI
         $this->forwardWebhookEvent($data, self::MAKE_URL);
 
         $isProd = Env::isProd();
-        Logger::warning("Is prod: $isProd");
+        //Logger::warning("Is prod: $isProd");
         if ($isProd) {
             $this->forwardWebhookEvent($data, self::NGROK_URL);
         } else {
-            Logger::warning('Dev env: Do not forward webhook to ngrok.');
+            //Logger::warning('Dev env: Do not forward webhook to ngrok.');
         }
 
         return $webhookEventInfo;
@@ -363,7 +363,7 @@ class RentvineAPI
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
 
         // 3. Execute cURL request
-        $forwardResponse = curl_exec($ch);
+        curl_exec($ch);
 
         curl_close($ch);
     }
@@ -407,10 +407,10 @@ class RentvineAPI
                     $objectTypeId = $units[0]['unit']['unitID'] ? 7 : 6;
                 }
 
-                $fileUploadedData = $this->addAttachmentToObject($buildingRentvineId, $objectTypeId, $_FILES);
+                $this->addAttachmentToObject($buildingRentvineId, $objectTypeId, $_FILES);
 
                 // Set the result to card
-                $updateFeedbackResult = $aptly->updateCardData($eventObject->data['_id'] ?? null, [
+                $aptly->updateCardData($eventObject->data['_id'] ?? null, [
                     AptlyAPI::RV_APTLY_FIELD_NAME => 'Document attached to Property',
                     AptlyAPI::RV_APTLY_ACTION_FIELD_NAME => 'Attached to property'
                 ]);
@@ -448,7 +448,7 @@ class RentvineAPI
         }
 
         // Set the result to card
-        $updateFeedbackResult = $aptlyApi->updateCardData($eventObject->data['_id'] ?? null, [
+        $aptlyApi->updateCardData($eventObject->data['_id'] ?? null, [
             AptlyAPI::ATTACH_TO_RV_LEASE_ACTION => 'Attached to lease',
             AptlyAPI::ATTACH_TO_RV_LEASE_RESULT => 'Document attached to Lease'
 
@@ -522,10 +522,10 @@ class RentvineAPI
             "reference" => "Bill from Aptly."
         ];
 
-        $result = $this->createOwnerPortfolioBill($billData);
+        $this->createOwnerPortfolioBill($billData);
 
         $cardId = $eventObject->data['_id'];
-        $updateCardResult = $aptly->updateCardData($cardId, [
+        $aptly->updateCardData($cardId, [
             AptlyAPI::BILL_TO_OWNER_RESULT => "Bill added to portfolio owner."
         ]);
     }
@@ -627,7 +627,7 @@ class RentvineAPI
             return;
         }
 
-        $propertyAddress = $this->getPropertyAddressFromDescription($changes[0]['value']);
+        $this->getPropertyAddressFromDescription($changes[0]['value']);
     }
 
     function getUnitsFromDriveFile($driveUrl)
@@ -684,14 +684,14 @@ class RentvineAPI
                         $unitOptions .= "<a href='$link'>Link Unit to Card</a>" . "<br><br>";
                     }
                     $aptly = new AptlyAPI();
-                    $updateResult = $aptly->updateCardData($data['data']['_id'], [
+                    $aptly->updateCardData($data['data']['_id'], [
                         'Unit multiple found' => $unitOptions
                     ]);
                 } else if (count($units) === 1) {
                     $unitOption = $units[0];
                     $aptly = new AptlyAPI();
 
-                    $updateResult = $aptly->updateCardData($data['data']['_id'], [
+                    $aptly->updateCardData($data['data']['_id'], [
                         'Unit' => $unitOption['_id']
                     ]);
                 }
@@ -712,9 +712,8 @@ class RentvineAPI
             $output = $client->getVendorNameAddressBasedTextContent($outputText);
             $json = json_decode($output, true);
             $billerName = $json['biller_name'] ?? null;
-            $billerAddress = $json['biller_address'] ?? null;
+            $json['biller_address'] ?? null;
             $vendorAptlyId = '';
-            $vendorName = '';
             foreach ($this->vendors as $vendorItem) {
                 $name = $vendorItem['Title'] ?? '';
                 if (!$name) { continue; }
@@ -826,16 +825,59 @@ class RentvineAPI
         return $client->getWorkOrderNumberFromText($searchText);
     }
 
+    /**
+     * @throws Exception
+     */
     public function retrieveBillDataFromAutomation($payload)
     {
         $apiAction = $payload['action'] ?? '' == 'automation';
         Logger::warning("retrieveBillDataFromAutomation $apiAction");
         if ($apiAction) {
+            $data = [
+                "billDate" => "",
+                "dateDue" => "",
+                "charges" => [
+                    [
+                        "description" => "",
+                        "chargeAccountID" => "",
+                        "amount" => null,
+                        "fromPayer" => "",
+                        "toPayee" => ""
+                    ]
+                ],
+                "leaseCharges" => [],
+                "payeeContactID" => "",
+                "reference" => "",
+                "tenantAmount" => 0,
+                "paymentMemo" => "",
+                "description" => "",
+                "workOrderID" => "",
+                "workOrderStatusID" => "",
+                "allocation" => false,
+                "serviceAccountNumber" => null,
+                "utilityPeriodStartDate" => null,
+                "utilityPeriodEndDate" => null
+            ];
+
             $unitAddress = $payload['data'][self::ADDRESS_UNIT_MIRROR] ?? '';
-            $unitAddress = trim(mb_substr($unitAddress, 0, 30, 'UTF-8'));
+            Logger::warning("unitAddress: " . json_encode($unitAddress));
+            $unitAddress = trim(mb_substr($unitAddress['address'], 0, 30, 'UTF-8'));
             Logger::warning("retrieveBillDataFromAutomation lookup address $unitAddress");
-            $unitId = $this->getUnitFromNumberAndStreetAddress($unitAddress);
-            Logger::warning("retrieveBillDataFromAutomation unitId $unitId");
+            $unitData = $this->getUnitFromNumberAndStreetAddress($unitAddress);
+            Logger::warning("retrieveBillDataFromAutomation unitId " . $unitData[self::RENTVINE_ID]);
+            $unitId = $unitData[self::RENTVINE_ID] ?? null;
+            if (!$unitId) {
+                throw new Exception('Could not find unit with id ' . $unitId);
+            }
+
+            $data['unitId'] = $unitId;
+            $data['billDate'] = $payload['data'][self::BILL_DATE_KEY];
+            $data['dateDue'] = $payload['data'][self::BILL_DATE_DUE_KEY];
+            $data['charges'][0]['description'] = $payload['data'][self::BILL_DESCRIPTION_KEY];
+            $data['charges'][0]['amount'] = $payload['data'][self::BILL_AMOUNT_KEY];
+
+            return $data;
+
         }
 
         return $payload;
