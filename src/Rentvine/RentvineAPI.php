@@ -29,6 +29,16 @@ class RentvineAPI
 
     public const BILL_DESCRIPTION_KEY = "k5Mj5r7nHiCjRGav7";
     public const BILL_AMOUNT_KEY = "5a7PBd2u6aEvrgYxi";
+    public const BILL_PAYEE_KEY = "raati5ZDsA65bbWYu";
+    public const BILL_DUE_AT_KEY = "dueAt";
+    public const BILL_ACCOUNT_NUMBER_KEY = "DxabpBjwkoybigoF2";
+    public const BILL_WH_AMOUNT_KEY = "ag4mrsBcSAe9E6iWz";
+    public const BILL_WH_DATE_KEY = "Za2trj2TFKzkvyBew";
+    public const BILL_WH_DESCRIPTION = "8HYE68wv3pGJjBZiP";
+    public const BILL_WH_UNIT_RV_ID = "PzJojc9vYXoZqn3Rq";
+    public const BILL_WH_RESPONSE_FIELD_KEY = "BcPkGTN5kiyjcsSWg";
+    public const BILL_WH_UNIT_ID = 'unit';
+    public const BILL_WH_BILL_ID_KEY = "BcPkGTN5kiyjcsSWg";
 
     public $units = [];
     public $vendors = [];
@@ -230,15 +240,24 @@ class RentvineAPI
     /**
      * @throws Exception
      */
-    public function createOwnerPortfolioBill($data)
+    public function createOwnerPortfolioBill($data, $eventObject)
     {
+        Logger::warning("createOwnerPortfolioBill data: " . $data['unitId'] . " type: " . gettype($data));
         Logger::warning("createOwnerPortfolioBill" . json_encode($data));
+        Logger::warning("eventObjectData: " . json_encode($eventObject->data));
+        if (!empty($eventObject->data[self::BILL_WH_BILL_ID_KEY])) {
+            Logger::warning("createOwnerPortfolioBill: Bill ID already exists: " . $data['unitId']);
+            return;
+        }
         $data = $this->retrieveBillDataFromAutomation($data);
         $endpoint = "/manager/accounting/bills";
 
         $unitId = $data['unitId'] ?? null;
         $ledgerId = $data['charges']['ledgerID'] ?? null;
         $leaseId = $data['charges'][0]['leaseID'] ?? null;
+
+        Logger::warning("UNIT ID: " . $unitId);
+
         if ($unitId) {
             if (!$leaseId) {
                 $leases = $this->findLeaseInJson("unitID", $unitId);
@@ -248,6 +267,9 @@ class RentvineAPI
             // Find Unit
             $units = $this->findUnitInJson(["unit_id" => $unitId]) ?? "[]";
             $units = json_decode($units, true);
+
+            Logger::warning("UNITS: " . json_encode($units));
+
             if ($units[0]) {
                 $unitTitle = $units[0]['Title'];
                 if ($unitTitle) {
@@ -268,7 +290,22 @@ class RentvineAPI
         $data['charges'][0]['ledgerID'] = $ledgerId;
         $data['charges'][0]['leaseID'] = $leaseId;
 
-        return $this->makeRequest($endpoint, 'POST', $data);
+        $response = $this->makeRequest($endpoint, 'POST', $data);
+        Logger::warning("createOwnerPortfolioBill RESPONSE" . json_encode($response));
+        $responseArray = json_decode($response, true);
+        $aptly = new AptlyAPI();
+        $cardId = $eventObject->data['_id'];
+        $aptly->updateCardData($cardId, [
+            AptlyAPI::BILL_WH_TO_OWNER_RESULT => $responseArray["bill"]["billID"] ?? "",
+        ], "o4jZzWcwWs6wR6B6E");
+
+        return $response;
+    }
+
+    public function getOwnerPortfolioBillById($billId)
+    {
+        $endpoint = "/manager/accounting/bills/$billId";
+        return $this->makeRequest($endpoint);
     }
 
     public function searchVendors()
@@ -332,6 +369,7 @@ class RentvineAPI
         $this->handleGetUnitFromDescription($data);
         $this->handleGetUnitFromPDF($data);
         $this->handleGetVendor($data);
+        $this->handleWhPostOwnerBillToPortfolio($data);
 
         // Forward events
         $this->forwardWebhookEvent($data, self::MAKE_URL);
@@ -525,9 +563,72 @@ class RentvineAPI
         $this->createOwnerPortfolioBill($billData);
 
         $cardId = $eventObject->data['_id'];
+        Logger::warning("CARD ID: " . $cardId . " - Update card bill date result." . AptlyAPI::BILL_WH_TO_OWNER_RESULT);
         $aptly->updateCardData($cardId, [
-            AptlyAPI::BILL_TO_OWNER_RESULT => "Bill added to portfolio owner."
+            AptlyAPI::BILL_TO_OWNER_RESULT => "Bill added to portfolio owner.",
+            AptlyAPI::BILL_WH_TO_OWNER_RESULT => "Bill added to portfolio owner."
         ]);
+    }
+
+    public function handleWhPostOwnerBillToPortfolio($event)
+    {
+        $eventObject = (object) $event;
+        $postOwnerBillAction = $eventObject->data[AptlyAPI::ADD_AS_BILL_KEY] ?? null;
+
+        if ($eventObject->action === "update" && $postOwnerBillAction) {
+            Logger::warning("handleWhPostOwnerBillToPortfolio " . $postOwnerBillAction);
+
+            $billDate = $eventObject->data[self::BILL_WH_DATE_KEY] ?? '';
+            $amount = $eventObject->data[self::BILL_WH_AMOUNT_KEY] ?? '';
+            $accountNumber = $eventObject->data[self::BILL_ACCOUNT_NUMBER_KEY] ?? '';
+            $dueDate = $eventObject->data[self::BILL_DUE_AT_KEY] ?? '';
+            $payeeContactId = $eventObject->data[self::BILL_PAYEE_KEY] ?? '';
+            $description = $eventObject->data[self::BILL_WH_DESCRIPTION] ?? '';
+            $unitRvId = $eventObject->data[self::BILL_WH_UNIT_RV_ID] ?? '';
+            $unitData = $eventObject->data[self::BILL_WH_UNIT_ID] ?? '';
+
+            // Find Unit
+            //$unitTitle = end($unitData)['name'] ?? '';
+            /*$ledgerId = null;
+            if ($unitTitle) {
+                $ledgers = $this->searchLedgers(["name" => $unitTitle]);
+                $ledgers = json_decode($ledgers, true);
+                $ledgerId = $ledgers[0]["ledger"]["ledgerID"] ?? null;
+                Logger::warning('Found ledger ID: ' . $ledgerId);
+            }*/
+
+
+            Logger::warning("handleWhPostOwnerBillToPortfolio " . json_encode([
+                "billDate" => $billDate,
+                "amount" => $amount['amount'],
+                "accountNumber" => $accountNumber,
+                "dueDate" => $dueDate,
+                "payeeContactId" => $payeeContactId,
+                "description" => $description,
+                "unitRvId" => $unitRvId
+            ]));
+
+            $data = [
+                "billDate" => $billDate,
+                "dateDue" => $dueDate,
+                "unitId" => $unitRvId,
+                "charges" => [[
+                    "description" => $description,
+                    "chargeAccountID" => $accountNumber,
+                    "amount" => $amount['amount'],
+                    "fromPayer" => '',
+                    "toPayee" => ''
+                ]],
+                "leaseCharges" => [],
+                "payeeContactID" => $payeeContactId,
+                "reference" => "",
+                "tenantAmount" => 0,
+                "paymentMemo" => "",
+                "description" => $description
+            ];
+
+            $this->createOwnerPortfolioBill($data, $eventObject);
+        }
     }
 
     public function shareFile($fileAttachmentId, $isSharedWithTenant = false, $isSharedWithOwner = false, $sendNotification = false) {
@@ -548,6 +649,14 @@ class RentvineAPI
         $json = $this->makeRequest('/manager/properties/units/export');
         file_put_contents('unis.json', $json);
         return "updated.";
+    }
+
+    public function deleteBillById($billId)
+    {
+        $endpoint = "/manager/accounting/bills/$billId";
+        return $this->makeRequest($endpoint, "DELETE", [
+            "voidLinkedBills" => 0
+        ]);
     }
 
     public function findUnitInJson($data, $encodeJson = true)
@@ -705,7 +814,10 @@ class RentvineAPI
     {
         $vendor = $data['data'][self::VENDOR_FIELD] ?? [];
         $pdfUrl = $data['data'][AptlyAPI::URL_TO_PDF_FIELD] ?? '';
-        $textRawOfDocument = $data['data'][self::RAW_DOC_CONTENT_FIELD];
+        $textRawOfDocument = $data['data'][self::RAW_DOC_CONTENT_FIELD] ?? '';
+        if (!$textRawOfDocument) {
+            return;
+        }
         if (empty($vendor) && $pdfUrl) {
             $outputText = $textRawOfDocument ?? $this->getDriveFileTextContent($pdfUrl);
             $client = new openAIClient();
@@ -830,7 +942,11 @@ class RentvineAPI
      */
     public function retrieveBillDataFromAutomation($payload)
     {
-        $apiAction = $payload['action'] ?? '' == 'automation';
+        $apiAction = ($payload['action'] ?? '') === 'automation';
+        Logger::warning('apiAction: ' . $apiAction);
+        if (!$apiAction) {
+            return $payload;
+        }
         Logger::warning("retrieveBillDataFromAutomation $apiAction");
         if ($apiAction) {
             $data = [
@@ -846,7 +962,7 @@ class RentvineAPI
                     ]
                 ],
                 "leaseCharges" => [],
-                "payeeContactID" => "",
+                "payeeContactID" => $payload['payeeContactID'] ?? "702",
                 "reference" => "",
                 "tenantAmount" => 0,
                 "paymentMemo" => "",
@@ -864,8 +980,10 @@ class RentvineAPI
             $unitAddress = trim(mb_substr($unitAddress['address'], 0, 30, 'UTF-8'));
             Logger::warning("retrieveBillDataFromAutomation lookup address $unitAddress");
             $unitData = $this->getUnitFromNumberAndStreetAddress($unitAddress);
+            Logger::warning("unitData: " . json_encode($unitData));
             Logger::warning("retrieveBillDataFromAutomation unitId " . $unitData[self::RENTVINE_ID]);
             $unitId = $unitData[self::RENTVINE_ID] ?? null;
+
             if (!$unitId) {
                 throw new Exception('Could not find unit with id ' . $unitId);
             }
@@ -875,6 +993,11 @@ class RentvineAPI
             $data['dateDue'] = $payload['data'][self::BILL_DATE_DUE_KEY];
             $data['charges'][0]['description'] = $payload['data'][self::BILL_DESCRIPTION_KEY];
             $data['charges'][0]['amount'] = $payload['data'][self::BILL_AMOUNT_KEY];
+
+            if (empty($data['workOrderID'])) {
+                unset($data['workOrderID']);
+                unset($data['workOrderStatusID']);
+            }
 
             return $data;
 

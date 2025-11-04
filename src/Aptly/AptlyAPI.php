@@ -2,6 +2,8 @@
 
 namespace Aptly;
 
+use Rentvine\Logger;
+
 class AptlyAPI
 {
     private $baseUrl;
@@ -23,6 +25,7 @@ class AptlyAPI
     public const ATTACH_TO_RV_LEASE_ACTION = 'Attach to rv lease action';
     public const ATTACH_TO_RV_LEASE_RESULT = 'Attach to rv lease result';
     public const POST_TO_OWNER_PORTFOLIO_FIELD = 'XQD5fixHSnDEs5Nrj';
+    public const ADD_AS_BILL_KEY = 'yty248gxyP46xW3Mf';
     public const POST_TO_OWNER_PORTFOLIO_VALUE = 'Post to owner portfolio';
     public const OWNER_PORTFOLIO_BILL_AMOUNT_FIELD = '5a7PBd2u6aEvrgYxi';
     public const OWNER_PORTFOLIO_BILL_DESCRIPTION_FIELD = 'k5Mj5r7nHiCjRGav7';
@@ -30,6 +33,8 @@ class AptlyAPI
     public const OWNER_PORTFOLIO_BILL_DATE_FIELD = 'zjH7HeQ7RZv7G3Hjh';
     public const PORTFOLIO_FIELD = 'cxDKhtjxAYutokyCQ';
     public const BILL_TO_OWNER_RESULT = "Post bill to owner portfolio result";
+    public const BILL_WH_TO_OWNER_RESULT = "Rentvine bill ID";
+    public const BILL_WH_TO_OWNER_RESULT_FIELD = "BcPkGTN5kiyjcsSWg";
     public const CHANGES_FIELD = "changes";
 
 
@@ -246,12 +251,18 @@ class AptlyAPI
         return null;
     }
 
-    public function updateCardData($cardId, $data) {
+    public function updateCardData($cardId, $data, $appletId = "fh35FSCxw6KB5xbZG") {
         if ($cardId) {
-            return self::makeAptlyApiRequest("/api/aptlet/fh35FSCxw6KB5xbZG", "POST", [
+            $data = [
                 "_id" => $cardId,
                 ...$data
-            ]);
+            ];
+            Logger::warning("updateCardData payload: " . json_encode($data));
+            $response = self::makeAptlyApiRequest("/api/aptlet/$appletId", "POST", $data);
+
+            Logger::warning("updateCardData: " . json_encode($response));
+
+            return $response;
         }
 
         return 'Failed to attach the document to building: No card ID';
