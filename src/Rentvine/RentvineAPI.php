@@ -370,6 +370,7 @@ class RentvineAPI
         $this->handleGetUnitFromPDF($data);
         $this->handleGetVendor($data);
         $this->handleWhPostOwnerBillToPortfolio($data);
+        $this->handleWhPostLeaseCharge($data);
 
         // Forward events
         $this->forwardWebhookEvent($data, self::MAKE_URL);
@@ -1004,5 +1005,62 @@ class RentvineAPI
         }
 
         return $payload;
+    }
+
+    public function createLeaseCharge($leaseId, $data)
+    {
+        $endpoint = "/manager/accounting/leases/$leaseId/charges";
+        return $this->makeRequest($endpoint, "POST", $data);
+    }
+
+    public function handleWhPostLeaseCharge($event)
+    {
+        $eventObject = (object) $event;
+        $postLeaseChargeAptlet = ($eventObject->data['aptletUuid'] ?? '') === '3ujGbHuYhyqqWzsW5';
+        $postLeaseChargeAction = ($eventObject->data['icCw6Ydd3YEMcrMm6'] ?? '') === true;
+
+        if (!$postLeaseChargeAptlet || !$postLeaseChargeAction) {
+            Logger::warning('DO NOT RUN handleWhPostLeaseCharge');
+            return;
+        }
+
+        $chargeAlreadyAdded = $eventObject->data["3Rzr47giPnyLeRQ3B"] ?? null;
+        if ($chargeAlreadyAdded) {
+            Logger::warning('DO NOT RUN handleWhPostLeaseCharge, charge already added: Charge: ' . $chargeAlreadyAdded);
+        }
+
+        Logger::warning('RUN IT handleWhPostLeaseCharge');
+        $leaseId = $eventObject->data['FibCsmzJZnmAzoLy9'] ?? '';
+        $chargeAccountId = $eventObject->data['PfnYjQagok9RmZjcL'] ?? null;
+        $chargeAmount = $eventObject->data['i5YDiK8KpYoTSGhrA']['amount'] ?? null;
+        $dateChargePosted = $eventObject->data['eSj2vhvteeXLKXjBZ'] ?? null;
+        $description = $eventObject->data['description'] ?? null;
+
+        Logger::warning('LEASE ID: ' . $leaseId);
+        Logger::warning('Charge Id: ' . $chargeAccountId);
+        Logger::warning('Amount: ' . $chargeAmount);
+        Logger::warning('Date Charge Posted: ' . $dateChargePosted);
+        Logger::warning('Description: ' . $description);
+
+        $createChargeResult = $this->createLeaseCharge($leaseId, [
+            "chargeAccountID" => $chargeAccountId,
+            "amount" => $chargeAmount,
+            "datePosted" => $dateChargePosted,
+            "description" => $description
+        ]);
+
+
+        $createChargeResult = json_decode($createChargeResult, true);
+        $transactionId = $createChargeResult['transaction']['transactionID'] ?? null;
+        Logger::warning('Transaction Id: ' . $transactionId);
+
+        /*$cardId = $eventObject->data['_id'];
+
+        $aptly = new AptlyAPI();
+        $aptly->updateCardData($cardId, [
+         "Rentvine posted charge ID" => $transactionId,
+        ], "GqmmePrTucLLgAzoJ");*/
+
+
     }
 }
