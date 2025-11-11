@@ -39,6 +39,16 @@ class RentvineAPI
     public const BILL_WH_RESPONSE_FIELD_KEY = "BcPkGTN5kiyjcsSWg";
     public const BILL_WH_UNIT_ID = 'unit';
     public const BILL_WH_BILL_ID_KEY = "BcPkGTN5kiyjcsSWg";
+    public const LEASE_CHARGE_APTLET_KEY = '3ujGbHuYhyqqWzsW5';
+    public const LEASE_POST_CHARGE_ACTION_KEY = 'icCw6Ydd3YEMcrMm6';
+    public const APTLET_UID_FIELD = 'aptletUuid';
+    public const LEASE_TRANSACTION_ID_KEY = '3Rzr47giPnyLeRQ3B';
+    public const LEASE_CHARGE_LEASE_ID_KEY = 'FibCsmzJZnmAzoLy9';
+    public const LEASE_CHARGE_ACCOUNT_ID_KEY = 'PfnYjQagok9RmZjcL';
+    public const LEASE_CHARGE_AMOUNT_KEY = 'i5YDiK8KpYoTSGhrA';
+    public const LEASE_CHARGE_DATE_POSTED_KEY = 'eSj2vhvteeXLKXjBZ';
+    public const LEASE_CHARGE_DESCRIPTION_KEY = 'description';
+    public const LEASE_CHARGE_APTLET_ID = 'GqmmePrTucLLgAzoJ';
 
     public $units = [];
     public $vendors = [];
@@ -1016,51 +1026,58 @@ class RentvineAPI
     public function handleWhPostLeaseCharge($event)
     {
         $eventObject = (object) $event;
-        $postLeaseChargeAptlet = ($eventObject->data['aptletUuid'] ?? '') === '3ujGbHuYhyqqWzsW5';
-        $postLeaseChargeAction = ($eventObject->data['icCw6Ydd3YEMcrMm6'] ?? '') === true;
+        $data = $eventObject->data ?? [];
+
+        $postLeaseChargeAptlet = ($data[self::APTLET_UID_FIELD] ?? '') === self::LEASE_CHARGE_APTLET_KEY;
+        $postLeaseChargeAction = ($data[self::LEASE_POST_CHARGE_ACTION_KEY] ?? false) === true;
 
         if (!$postLeaseChargeAptlet || !$postLeaseChargeAction) {
             Logger::warning('DO NOT RUN handleWhPostLeaseCharge');
             return;
         }
 
-        $chargeAlreadyAdded = $eventObject->data["3Rzr47giPnyLeRQ3B"] ?? null;
-        if ($chargeAlreadyAdded) {
-            Logger::warning('DO NOT RUN handleWhPostLeaseCharge, charge already added: Charge: ' . $chargeAlreadyAdded);
+        if (!empty($data[self::LEASE_TRANSACTION_ID_KEY])) {
+            Logger::warning('DO NOT RUN handleWhPostLeaseCharge, charge already added: Charge: ' . $data[self::LEASE_TRANSACTION_ID_KEY]);
+            return;
         }
 
-        Logger::warning('RUN IT handleWhPostLeaseCharge');
-        $leaseId = $eventObject->data['FibCsmzJZnmAzoLy9'] ?? '';
-        $chargeAccountId = $eventObject->data['PfnYjQagok9RmZjcL'] ?? null;
-        $chargeAmount = $eventObject->data['i5YDiK8KpYoTSGhrA']['amount'] ?? null;
-        $dateChargePosted = $eventObject->data['eSj2vhvteeXLKXjBZ'] ?? null;
-        $description = $eventObject->data['description'] ?? null;
+        $leaseId = $data[self::LEASE_CHARGE_LEASE_ID_KEY] ?? null;
+        if (!$leaseId) {
+            Logger::warning('handleWhPostLeaseCharge missing lease id');
+            return;
+        }
 
-        Logger::warning('LEASE ID: ' . $leaseId);
-        Logger::warning('Charge Id: ' . $chargeAccountId);
-        Logger::warning('Amount: ' . $chargeAmount);
-        Logger::warning('Date Charge Posted: ' . $dateChargePosted);
-        Logger::warning('Description: ' . $description);
+        $payload = [
+            "chargeAccountID" => $data[self::LEASE_CHARGE_ACCOUNT_ID_KEY] ?? null,
+            "amount" => $data[self::LEASE_CHARGE_AMOUNT_KEY]['amount'] ?? null,
+            "datePosted" => $data[self::LEASE_CHARGE_DATE_POSTED_KEY] ?? null,
+            "description" => $data[self::LEASE_CHARGE_DESCRIPTION_KEY] ?? null
+        ];
 
-        $createChargeResult = $this->createLeaseCharge($leaseId, [
-            "chargeAccountID" => $chargeAccountId,
-            "amount" => $chargeAmount,
-            "datePosted" => $dateChargePosted,
-            "description" => $description
-        ]);
+        Logger::warning('RUN IT handleWhPostLeaseCharge ' . json_encode([
+            'leaseId' => $leaseId,
+            'chargeAccountId' => $payload['chargeAccountID'],
+            'amount' => $payload['amount'],
+            'datePosted' => $payload['datePosted']
+        ]));
 
+        try {
+            $createChargeResult = $this->createLeaseCharge($leaseId, $payload);
+            $resultArray = json_decode($createChargeResult, true) ?: [];
+            Logger::warning('createLeaseCharge result: ' . json_encode($resultArray));
 
-        $createChargeResult = json_decode($createChargeResult, true);
-        $transactionId = $createChargeResult['transaction']['transactionID'] ?? null;
-        Logger::warning('Transaction Id: ' . $transactionId);
+            $transactionId = $resultArray['transaction']['transactionID'] ?? null;
+            Logger::warning('Transaction Id: ' . $transactionId);
 
-        /*$cardId = $eventObject->data['_id'];
-
-        $aptly = new AptlyAPI();
-        $aptly->updateCardData($cardId, [
-         "Rentvine posted charge ID" => $transactionId,
-        ], "GqmmePrTucLLgAzoJ");*/
-
-
+            $cardId = $data['_id'] ?? null;
+            if ($cardId) {
+                $aptly = new AptlyAPI();
+                $aptly->updateCardData($cardId, [
+                    "Rentvine posted charge ID" => $transactionId
+                ], self::LEASE_CHARGE_APTLET_ID);
+            }
+        } catch (Throwable $e) {
+            Logger::warning('handleWhPostLeaseCharge error: ' . $e->getMessage());
+        }
     }
 }
