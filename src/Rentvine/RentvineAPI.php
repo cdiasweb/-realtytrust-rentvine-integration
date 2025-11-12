@@ -15,7 +15,6 @@ class RentvineAPI
     private $userName;
     private $password;
 
-    public const OWNER_BILLS_FIELD = 'Owner Bills';
     public const RENTVINE_ID = 'Rentvine ID';
     public const RENTVINE_DOC_UPLOAD_FIELD = 'Rentvine Building documents';
     public const UNIT_FIELD = 'RPYgwSp52dD4tBbrN';
@@ -36,8 +35,6 @@ class RentvineAPI
     public const BILL_WH_DATE_KEY = "Za2trj2TFKzkvyBew";
     public const BILL_WH_DESCRIPTION = "8HYE68wv3pGJjBZiP";
     public const BILL_WH_UNIT_RV_ID = "PzJojc9vYXoZqn3Rq";
-    public const BILL_WH_RESPONSE_FIELD_KEY = "BcPkGTN5kiyjcsSWg";
-    public const BILL_WH_UNIT_ID = 'unit';
     public const BILL_WH_BILL_ID_KEY = "BcPkGTN5kiyjcsSWg";
     public const LEASE_CHARGE_APTLET_KEY = '3ujGbHuYhyqqWzsW5';
     public const LEASE_POST_CHARGE_ACTION_KEY = 'icCw6Ydd3YEMcrMm6';
@@ -66,31 +63,62 @@ class RentvineAPI
         $this->loadVendors();
     }
 
+    /**
+     * @throws Exception
+     */
     private function makeRequest($endpoint, $method = 'GET', $data = [], $headers = null)
     {
         $url = $this->baseUrl . $endpoint;
         $authorizationString = "{$this->userName}:{$this->password}";
-        $httpHeaders = $headers ?? [
-            'Authorization: Basic ' . base64_encode($authorizationString),
-            'Content-Type: application/json'
-        ];
-        $curl = curl_init();
-        curl_setopt($curl, CURLOPT_URL, $url);
-        curl_setopt($curl, CURLOPT_CUSTOMREQUEST, $method);
-        curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($curl, CURLOPT_HTTPHEADER, $httpHeaders);
 
-        if (!empty($data)) {
+        $defaultHeaders = [
+            'Authorization: Basic ' . base64_encode($authorizationString)
+        ];
+
+        $isJsonBody = !empty($data) && strtoupper($method) !== 'GET';
+        if ($isJsonBody) {
+            $defaultHeaders[] = 'Content-Type: application/json';
+        }
+
+        $httpHeaders = $headers ? array_merge($defaultHeaders, $headers) : $defaultHeaders;
+
+        $curl = curl_init();
+
+        // If GET and $data provided, append as a query string
+        if (!empty($data) && strtoupper($method) === 'GET') {
+            $query = is_array($data) ? http_build_query($data) : $data;
+            $url .= (strpos($url, '?') === false ? '?' : '&') . $query;
+        }
+
+        curl_setopt_array($curl, [
+            CURLOPT_URL => $url,
+            CURLOPT_CUSTOMREQUEST => $method,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => $httpHeaders,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_FAILONERROR => false
+        ]);
+
+        if ($isJsonBody) {
             curl_setopt($curl, CURLOPT_POSTFIELDS, json_encode($data));
         }
 
         $response = curl_exec($curl);
-
-        if (curl_errno($curl)) {
-            throw new Exception('CURL Error: ' . curl_error($curl));
-        }
+        $errno = curl_errno($curl);
+        $error = curl_error($curl);
+        $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
 
         curl_close($curl);
+
+        if ($errno) {
+            throw new Exception('CURL Error (' . $errno . '): ' . $error);
+        }
+
+        if ($httpCode >= 400) {
+            throw new Exception("HTTP Error: {$httpCode} - Response: {$response}");
+        }
 
         return $response;
     }
@@ -596,18 +624,6 @@ class RentvineAPI
             $payeeContactId = $eventObject->data[self::BILL_PAYEE_KEY] ?? '';
             $description = $eventObject->data[self::BILL_WH_DESCRIPTION] ?? '';
             $unitRvId = $eventObject->data[self::BILL_WH_UNIT_RV_ID] ?? '';
-            $unitData = $eventObject->data[self::BILL_WH_UNIT_ID] ?? '';
-
-            // Find Unit
-            //$unitTitle = end($unitData)['name'] ?? '';
-            /*$ledgerId = null;
-            if ($unitTitle) {
-                $ledgers = $this->searchLedgers(["name" => $unitTitle]);
-                $ledgers = json_decode($ledgers, true);
-                $ledgerId = $ledgers[0]["ledger"]["ledgerID"] ?? null;
-                Logger::warning('Found ledger ID: ' . $ledgerId);
-            }*/
-
 
             Logger::warning("handleWhPostOwnerBillToPortfolio " . json_encode([
                 "billDate" => $billDate,
