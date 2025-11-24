@@ -52,6 +52,7 @@ class RentvineAPI
 
     const MAKE_WH_SIGNATURE = "YYLKFymLrrkfMyw3R-WCaphN9vZwN2z9PZb";
     const MAKE_URL = "https://hook.us1.make.com/tf4abmmirj1lo8crrhjn3nazh84wn3gi";
+    const N8N_URL = "https://n8n-rts.onrender.com/webhook/8816a233-dafa-45de-8ea8-47176d10ec0a";
     const NGROK_URL = "https://egret-glorious-cow.ngrok-free.app/hook";
 
     public function __construct($userName, $password, $baseUrl = 'https://realtytrustservicesllc.rentvine.com/api')
@@ -412,6 +413,7 @@ class RentvineAPI
 
         // Forward events
         $this->forwardWebhookEvent($data, self::MAKE_URL);
+        $this->forwardWebhookEvent($data, self::N8N_URL);
 
         $isProd = Env::isProd();
         //Logger::warning("Is prod: $isProd");
