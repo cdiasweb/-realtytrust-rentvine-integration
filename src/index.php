@@ -74,13 +74,25 @@ $routes = [
     ],
     'POST' => [
         '/hook' => function () use ($rentvine) {
-            header("HTTP/1.1 202 OK");
+            ignore_user_abort(true);
+
+            // Buffer response so we can set correct Content-Length
+            ob_start();
+            http_response_code(202);
             header("Content-Type: text/plain");
             header("Connection: close");
+            echo 'Accepted';
             $size = ob_get_length();
             header("Content-Length: $size");
-            echo 'Accepted';
+            ob_end_flush();
+            flush();
 
+            // Ensure request is finished for PHP-FPM / FastCGI
+            if (function_exists('fastcgi_finish_request')) {
+                fastcgi_finish_request();
+            }
+
+            // Continue processing in background
             $data = getJsonBody();
             $rentvine->handleWebhook($data);
         },

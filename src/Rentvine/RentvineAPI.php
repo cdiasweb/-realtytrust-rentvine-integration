@@ -524,13 +524,14 @@ class RentvineAPI
         if ($fileAttachmentId) {
             $shareWithTenant = !($shareWithTenant === 'False');
             $shareFileResult = $this->shareFile($fileAttachmentId, $shareWithTenant);
+            Logger::warning("Share file result: " . json_encode($shareFileResult));
         }
 
         // Set the result to card
         $aptlyApi->updateCardData($eventObject->data['_id'] ?? null, [
             AptlyAPI::ATTACH_TO_RV_LEASE_ACTION => 'Attached to lease',
-            AptlyAPI::ATTACH_TO_RV_LEASE_RESULT => 'Document attached to Lease'
-
+            AptlyAPI::ATTACH_TO_RV_LEASE_RESULT => 'Document attached to Lease',
+            'Attach to rv lease id' => $fileAttachmentId
         ]);
     }
 
@@ -1048,6 +1049,9 @@ class RentvineAPI
 
         $postLeaseChargeAptlet = ($data[self::APTLET_UID_FIELD] ?? '') === self::LEASE_CHARGE_APTLET_KEY;
         $postLeaseChargeAction = ($data[self::LEASE_POST_CHARGE_ACTION_KEY] ?? false) === true;
+
+        Logger::warning('postLeaseChargeAptlet: ' . json_encode($postLeaseChargeAptlet));
+        Logger::warning('postLeaseChargeAction: ' . json_encode($postLeaseChargeAction));
 
         if (!$postLeaseChargeAptlet || !$postLeaseChargeAction) {
             Logger::warning('DO NOT RUN handleWhPostLeaseCharge');
