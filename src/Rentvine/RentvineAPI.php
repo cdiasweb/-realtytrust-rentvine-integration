@@ -486,12 +486,15 @@ class RentvineAPI
                     $objectTypeId = $units[0]['unit']['unitID'] ? 7 : 6;
                 }
 
-                $this->addAttachmentToObject($buildingRentvineId, $objectTypeId, $_FILES);
+                $attachmentResult = $this->addAttachmentToObject($buildingRentvineId, $objectTypeId, $_FILES);
+                $attachmentResult = json_decode($attachmentResult, true);
+                Logger::warning("Attachment result: " . json_encode($attachmentResult));
 
                 // Set the result to card
                 $aptly->updateCardData($eventObject->data['_id'] ?? null, [
                     AptlyAPI::RV_APTLY_FIELD_NAME => 'Document attached to Property',
-                    AptlyAPI::RV_APTLY_ACTION_FIELD_NAME => 'Attached to property'
+                    AptlyAPI::RV_APTLY_ACTION_FIELD_NAME => 'Attached to property',
+                    AptlyAPI::RV_APTLY_PROPERTY_ID_FILE_FIELD_NAME => $attachmentResult['fileAttachment']['fileAttachmentID'] ?? null
                 ]);
             }
         }

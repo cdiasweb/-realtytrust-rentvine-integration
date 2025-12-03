@@ -14,6 +14,7 @@ class AptlyAPI
 
     public const RV_APTLY_FIELD_NAME = 'Attach to rv property result';
     public const RV_APTLY_ACTION_FIELD_NAME = 'Attach to rv property action';
+    public const RV_APTLY_PROPERTY_ID_FILE_FIELD_NAME = 'Attach to rv property id';
 
     public const ATTACH_RV_PROPERTY_FIELD = 'AtRqjs5M5gXsBAxYa';
     public const ATTACH_TO_PROPERTY_VALUE = 'Attach to property';
