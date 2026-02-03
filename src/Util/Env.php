@@ -41,4 +41,10 @@ class Env
         self::setup();
         return $_ENV['PROJECT_URL'] ?? '';
     }
+
+    public static function getRedisPort(): string
+    {
+        self::setup();
+        return $_ENV['REDIS_PORT'] ?? '';
+    }
 }
