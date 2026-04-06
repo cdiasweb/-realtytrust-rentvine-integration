@@ -1,11 +1,13 @@
 <?php
 
 namespace Rentvine;
+
 use Aptly\AptlyAPI;
 use CURLFile;
 use Exception;
 use Imagick;
 use lib\openAIClient;
+use NumberFormatter;
 use Throwable;
 use Util\Env;
 
@@ -204,17 +206,37 @@ class RentvineAPI
 
     public function loadVendors()
     {
-        $filePath = __DIR__ . '/vendors.json';
+        try {
+            $filePath = __DIR__ . '/vendors.json';
 
-        $jsonString = file_get_contents($filePath);
+            // Check if file exists first
+            if (!file_exists($filePath)) {
+                $this->vendors = [];
+                return;
+            }
 
-        $data = json_decode($jsonString, true);
+            $jsonString = file_get_contents($filePath);
 
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            throw new Exception('Invalid JSON: ' . json_last_error_msg());
+            if ($jsonString === false) {
+                Logger::warning("Failed to read vendors file");
+                $this->vendors = [];
+                return;
+            }
+
+            $data = json_decode($jsonString, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                Logger::warning("Error decoding vendors JSON: " . json_last_error_msg());
+                $this->vendors = [];
+                return;
+            }
+
+            $this->vendors = $data;
+
+        } catch (Throwable $e) {
+            Logger::warning("Error loading vendors: " . $e->getMessage());
+            $this->vendors = [];
         }
-
-        $this->vendors = $data;
     }
 
     public function getUnitFromNumberAndStreetAddress($address)
@@ -397,33 +419,132 @@ class RentvineAPI
         return $this->makeRequest($endpoint, 'DELETE');
     }
 
+    public function getPayableBillsFromPortfolio($data)
+    {
+        $page = $data['page'] ?? 1;
+        $pageSize = $data['pageSize'] ?? 50;
+        $datePostedMin = $data['datePostedMin'] ?? date("Y-m-d", strtotime("-30 days"));
+        $datePostedMax = $data['datePostedMax'] ?? date("Y-m-d");
+        $isVoided = $data['isVoided'] ?? '0';
+        $portfolioId = $data['portfolioID'] ?? false;
+        $isPaid = $data['isPaid'] ?? '0';
+
+        if (!$portfolioId) {
+            return json_encode(["error" => "Portfolio ID not found"]);
+        }
+
+        $endpoint = "/manager/accounting/payables/search?" .
+            "page=$page&pageSize=$pageSize&" .
+            "datePostedMin=$datePostedMin&datePostedMax=$datePostedMax&" .
+            "isVoided=$isVoided&tab=bills&isPaid=$isPaid&portfolioID=$portfolioId";
+
+        $result = $this->makeRequest($endpoint);
+
+        return json_decode($result, true);
+    }
+
+    public function updatePortfolioUnpaidBillsData($data)
+    {
+        $portfolioId = $data['portfolioID'] ?? false;
+        if (!$portfolioId) {
+            return json_encode(["error" => "Portfolio ID not provided."]);
+        }
+
+        $totalBillDueAmount = 0;
+        $totalBillAmountPaid = 0;
+
+        $billsDue = $this->getPayableBillsFromPortfolio(["portfolioID" => $portfolioId]);
+        Logger::warning("BILLS DUE: " . json_encode($billsDue));
+
+        foreach ($billsDue as $bill) {
+            if ($bill['transaction'] ?? null) {
+                $amount = (string)($bill['transaction']['amount'] ?? "0.00");
+                $amountPaid = (string)($bill['transaction']['amountPaid'] ?? "0.00");
+                $totalBillDueAmount = bcadd($totalBillDueAmount, $amount, 2);
+                $totalBillAmountPaid = bcadd($totalBillAmountPaid, $amountPaid, 2);
+            }
+        }
+
+        $result = [
+            "billDueAmount" => $totalBillDueAmount,
+            "billAmountPaid" => $totalBillAmountPaid,
+            "pendingBillAmount" => bcsub($totalBillDueAmount, $totalBillAmountPaid, 2),
+            "payableBills" => $billsDue
+        ];
+
+        return json_encode($result);
+    }
+
     public function handleWebhook($data)
     {
         $webhookEventInfo = 'Webhook Received: ' . json_encode($data);
+        $isProd = Env::isProd();
 
         // Handle events
-        $this->handleBuildingAttachment($data);
-        $this->handleLeaseAttachment($data);
-        $this->handlePostOwnerBillToPortfolio($data);
-        $this->handleGetUnitFromDescription($data);
-        $this->handleGetUnitFromPDF($data);
-        $this->handleGetVendor($data);
-        $this->handleWhPostOwnerBillToPortfolio($data);
-        $this->handleWhPostLeaseCharge($data);
+        if ($isProd) {
+            $this->handleBuildingAttachment($data);
+            $this->handleLeaseAttachment($data);
+            $this->handlePostOwnerBillToPortfolio($data);
+            $this->handleGetUnitFromDescription($data);
+            $this->handleGetUnitFromPDF($data);
+            $this->handleGetVendor($data);
+            $this->handleWhPostOwnerBillToPortfolio($data);
+            $this->handleWhPostLeaseCharge($data);
+        }
+
+        $this->handleBillDueInfo($data);
 
         // Forward events
         $this->forwardWebhookEvent($data, self::MAKE_URL);
         $this->forwardWebhookEvent($data, self::N8N_URL);
 
-        $isProd = Env::isProd();
-        //Logger::warning("Is prod: $isProd");
+        // Forward to NGROK only if prod env
         if ($isProd) {
             $this->forwardWebhookEvent($data, self::NGROK_URL);
-        } else {
-            //Logger::warning('Dev env: Do not forward webhook to ngrok.');
         }
 
         return $webhookEventInfo;
+    }
+
+    public function handleBillDueInfo($data)
+    {
+        Logger::warning("BILL DUE ACTION DATA: " . json_encode($data));
+        $eventObject = (object)$data;
+        $boardName = $eventObject->board_name ?? null;
+        $updateBillsDueAction = ($eventObject->changes[0]['field'] ?? null) === AptlyAPI::PORTFOLIO_BILL_DUE_ACTION_FIELD_KEY;
+        Logger::warning("BILLS DUE ACTION: " . json_encode($updateBillsDueAction));
+        $aptly = new AptlyAPI();
+        if ($updateBillsDueAction && $boardName === AptlyAPI::BOARD_PORTFOLIO_FIELD_VALUE) {
+            Logger::warning("RUN BILLS ACTION");
+            $portfolioId = $eventObject->data['rentvineId'] ?? null;
+            Logger::warning("PORTFOLIO ID: " . $portfolioId);
+            $unpaidBillsData = $this->updatePortfolioUnpaidBillsData(['portfolioID' => $portfolioId]);
+            Logger::warning("UNPAID BILLS DATA: " . json_encode($unpaidBillsData));
+            $unpaidBillsData = json_decode($unpaidBillsData, true);
+
+            $clientHtml = $this->getPayableBillsTable($unpaidBillsData['payableBills'] ?? null);
+            $internalHtml = $this->getPayableBillsTable($unpaidBillsData['payableBills'] ?? null, true);
+
+            $amount = $unpaidBillsData['pendingBillAmount'] ?? "0.00";
+            Logger::warning("BEFORE UPDATE CARD DATA: $boardName");
+            Logger::warning("Amount to update: " . $amount);
+            Logger::warning("ID: " . $eventObject->data['_id'] ?? null);
+
+            try {
+                $updateResult = $aptly->updateCardData($eventObject->data['_id'] ?? null, [
+                    AptlyAPI::PORTFOLIO_BILLS_DUE_TOTAL_KEY => $amount,
+                    AptlyAPI::PORTFOLIO_CLIENT_BILLS_LIST => $clientHtml,
+                    AptlyAPI::PORTFOLIO_INTERNAL_BILLS_LIST => $internalHtml,
+                ], AptlyAPI::PORTFOLIO_APTLET_ID);
+                Logger::warning("UPDATE RESULT: " . json_encode($updateResult));
+            } catch (Throwable $e) {
+                Logger::warning("Error updating card data: " . $e->getMessage());
+            }
+
+            Logger::warning("AFTER UPDATE CARD DATA: $boardName");
+        } else {
+            Logger::warning("DO NOT RUN BILLS ACTION");
+        }
     }
 
     public function forwardWebhookEvent($data, $whUrl = null)
@@ -447,8 +568,9 @@ class RentvineAPI
         curl_close($ch);
     }
 
-    public function handleBuildingAttachment($event) {
-        $eventObject = (object) $event;
+    public function handleBuildingAttachment($event)
+    {
+        $eventObject = (object)$event;
 
         $urlToPdf = $eventObject->data[AptlyAPI::URL_TO_PDF_FIELD] ?? null;
         $attachToPropertyAction = $eventObject->data[AptlyAPI::ATTACH_RV_PROPERTY_FIELD] ?? null;
@@ -500,8 +622,9 @@ class RentvineAPI
         }
     }
 
-    public function handleLeaseAttachment($event) {
-        $eventObject = (object) $event;
+    public function handleLeaseAttachment($event)
+    {
+        $eventObject = (object)$event;
         $attachToLeaseAction = $eventObject->data[AptlyAPI::ATTACH_TO_RV_LEASE_ACTION_FIELD] ?? null;
         $urlToPDF = $eventObject->data[AptlyAPI::URL_TO_PDF_FIELD] ?? null;
         $shareWithTenant = $eventObject->data[AptlyAPI::SHARE_WITH_TENANT_FIELD] ?? null;
@@ -538,7 +661,8 @@ class RentvineAPI
         ]);
     }
 
-    public function createFilePostObject($drivePdfFileLink, $eventObject) {
+    public function createFilePostObject($drivePdfFileLink, $eventObject)
+    {
         $aptly = new AptlyAPI();
         $googleDriveFileId = $aptly->extractGoogleDriveFileId($drivePdfFileLink);
         if (!$googleDriveFileId) {
@@ -562,7 +686,7 @@ class RentvineAPI
 
     public function handlePostOwnerBillToPortfolio($event)
     {
-        $eventObject = (object) $event;
+        $eventObject = (object)$event;
         $postOwnerBillAction = $eventObject->data[AptlyAPI::POST_TO_OWNER_PORTFOLIO_FIELD] ?? null;
         $portfolioCardId = $eventObject->data[AptlyAPI::PORTFOLIO_FIELD][0]['_id'] ?? null;
         $aptly = new AptlyAPI();
@@ -617,7 +741,7 @@ class RentvineAPI
 
     public function handleWhPostOwnerBillToPortfolio($event)
     {
-        $eventObject = (object) $event;
+        $eventObject = (object)$event;
         $postOwnerBillAction = $eventObject->data[AptlyAPI::ADD_AS_BILL_KEY] ?? null;
 
         if ($eventObject->action === "update" && $postOwnerBillAction) {
@@ -632,14 +756,14 @@ class RentvineAPI
             $unitRvId = $eventObject->data[self::BILL_WH_UNIT_RV_ID] ?? '';
 
             Logger::warning("handleWhPostOwnerBillToPortfolio " . json_encode([
-                "billDate" => $billDate,
-                "amount" => $amount['amount'],
-                "accountNumber" => $accountNumber,
-                "dueDate" => $dueDate,
-                "payeeContactId" => $payeeContactId,
-                "description" => $description,
-                "unitRvId" => $unitRvId
-            ]));
+                    "billDate" => $billDate,
+                    "amount" => $amount['amount'],
+                    "accountNumber" => $accountNumber,
+                    "dueDate" => $dueDate,
+                    "payeeContactId" => $payeeContactId,
+                    "description" => $description,
+                    "unitRvId" => $unitRvId
+                ]));
 
             $data = [
                 "billDate" => $billDate,
@@ -664,7 +788,8 @@ class RentvineAPI
         }
     }
 
-    public function shareFile($fileAttachmentId, $isSharedWithTenant = false, $isSharedWithOwner = false, $sendNotification = false) {
+    public function shareFile($fileAttachmentId, $isSharedWithTenant = false, $isSharedWithOwner = false, $sendNotification = false)
+    {
         if (!$fileAttachmentId) {
             return;
         }
@@ -701,7 +826,7 @@ class RentvineAPI
         $data = json_decode($json, true);
 
         if ($unitId) {
-            $filtered = array_filter($data, function($item) use ($unitId) {
+            $filtered = array_filter($data, function ($item) use ($unitId) {
                 $target = strtolower($item['Rentvine ID']);
                 return $target == $unitId;
             });
@@ -709,7 +834,7 @@ class RentvineAPI
             // Prepare search words
             $searchWords = array_filter(explode(' ', strtolower($searchText)));
 
-            $filtered = array_filter($data, function($item) use ($searchWords) {
+            $filtered = array_filter($data, function ($item) use ($searchWords) {
                 $target = strtolower($item['Title']);
 
                 // Check if all search words are in the target string
@@ -734,7 +859,7 @@ class RentvineAPI
         $jsonPath = __DIR__ . '/leases.json';
         $json = file_get_contents($jsonPath);
         $data = json_decode($json, true);
-        return array_values(array_filter($data, function($item) use ($field, $content) {
+        return array_values(array_filter($data, function ($item) use ($field, $content) {
             return $item['lease'][$field] == $content;
         }));
     }
@@ -763,7 +888,7 @@ class RentvineAPI
 
     function handleGetUnitFromDescription($event)
     {
-        $eventObject = (object) $event;
+        $eventObject = (object)$event;
         $changes = $eventObject->changes ?? null;
         if (!$changes || $changes[0]['field'] !== 'description') {
             return;
@@ -799,7 +924,8 @@ class RentvineAPI
         return json_encode($aptlyIds);
     }
 
-    function handleGetUnitFromPDF($data, $force = false) {
+    function handleGetUnitFromPDF($data, $force = false)
+    {
         try {
             $unit = $data['data'][self::UNIT_FIELD] ?? [];
             $multipleUnit = $data['data'][self::UNIT_MULTIPLE_FIELD] ?? '';
@@ -857,11 +983,13 @@ class RentvineAPI
             $output = $client->getVendorNameAddressBasedTextContent($outputText);
             $json = json_decode($output, true);
             $billerName = $json['biller_name'] ?? null;
-            $json['biller_address'] ?? null;
+                $json['biller_address'] ?? null;
             $vendorAptlyId = '';
             foreach ($this->vendors as $vendorItem) {
                 $name = $vendorItem['Title'] ?? '';
-                if (!$name) { continue; }
+                if (!$name) {
+                    continue;
+                }
                 $match = $this->names_loose_match($billerName, $name);
                 if ($match) {
                     Logger::warning('Test names match: ' . $billerName . " - " . $name . ' There is a MATCH? ' . json_encode($match));
@@ -882,7 +1010,8 @@ class RentvineAPI
         }
     }
 
-    function getGoogleDriveDownloadUrl($shareUrl) {
+    function getGoogleDriveDownloadUrl($shareUrl)
+    {
         if (preg_match('/\/d\/(.*?)\//', $shareUrl, $matches)) {
             return 'https://drive.google.com/uc?export=download&id=' . $matches[1];
         }
@@ -925,7 +1054,8 @@ class RentvineAPI
         return $outputText;
     }
 
-    function normalize_name($string) {
+    function normalize_name($string)
+    {
         $string = strtolower($string); // lowercase
         $string = preg_replace('/[^\p{L}\p{N}\s]/u', '', $string); // remove punctuation
 
@@ -955,7 +1085,8 @@ class RentvineAPI
         return $words;
     }
 
-    function names_loose_match($name1, $name2) {
+    function names_loose_match($name1, $name2)
+    {
         $words1 = $this->normalize_name($name1);
         $words2 = $this->normalize_name($name2);
 
@@ -1047,7 +1178,7 @@ class RentvineAPI
 
     public function handleWhPostLeaseCharge($event)
     {
-        $eventObject = (object) $event;
+        $eventObject = (object)$event;
         $data = $eventObject->data ?? [];
 
         $postLeaseChargeAptlet = ($data[self::APTLET_UID_FIELD] ?? '') === self::LEASE_CHARGE_APTLET_KEY;
@@ -1080,11 +1211,11 @@ class RentvineAPI
         ];
 
         Logger::warning('RUN IT handleWhPostLeaseCharge ' . json_encode([
-            'leaseId' => $leaseId,
-            'chargeAccountId' => $payload['chargeAccountID'],
-            'amount' => $payload['amount'],
-            'datePosted' => $payload['datePosted']
-        ]));
+                'leaseId' => $leaseId,
+                'chargeAccountId' => $payload['chargeAccountID'],
+                'amount' => $payload['amount'],
+                'datePosted' => $payload['datePosted']
+            ]));
 
         try {
             $createChargeResult = $this->createLeaseCharge($leaseId, $payload);
@@ -1103,6 +1234,118 @@ class RentvineAPI
             }
         } catch (Throwable $e) {
             Logger::warning('handleWhPostLeaseCharge error: ' . $e->getMessage());
+        }
+    }
+
+    function arrayToHtmlTable(array $data, array $headerMap = []): string
+    {
+        if (empty($data)) {
+            return '<table style="font-size:8px;"><tr><td>No data</td></tr></table>';
+        }
+
+        $html = '<table border="1" cellpadding="5" cellspacing="0" style="font-size:9px;border-collapse:collapse;">';
+
+        // If no header map, fallback to original behavior
+        if (empty($headerMap)) {
+            $headerMap = [];
+            foreach (array_keys($data[0]) as $key) {
+                $headerMap[ucfirst($key)] = $key;
+            }
+        }
+
+        // Headers
+        $html .= '<tr>';
+        foreach ($headerMap as $label => $path) {
+            $html .= '<th style="font-size:8px;padding:8px">' . htmlspecialchars($label) . '</th>';
+        }
+        $html .= '</tr>';
+
+        // Rows
+        foreach ($data as $row) {
+            $html .= '<tr>';
+
+            foreach ($headerMap as $path) {
+                $value = $this->getValueByPath($row, $path, '');
+
+                // Array → JSON
+                if (is_array($value)) {
+                    $value = json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+                }
+
+                if (str_starts_with($value, 'https')) {
+                    $value = "<a href='$value'>Bill Link</a>";
+                    $html .= '<td style="font-size:8px;"><pre style="margin:0;">'
+                        . (string)$value .
+                        '</pre></td>';
+                    continue;
+                }
+
+                $html .= '<td style="font-size:8px;"><pre style="margin:0;">' . $value . '</pre></td>';
+            }
+
+            $html .= '</tr>';
+        }
+
+        $html .= '</table>';
+
+        return $html;
+    }
+
+    function getValueByPath(array $array, string $path, $default = '')
+    {
+        $keys = explode('.', $path);
+
+        foreach ($keys as $key) {
+            if (!is_array($array) || !array_key_exists($key, $array)) {
+                return $default;
+            }
+            $array = $array[$key];
+        }
+
+        return $array;
+    }
+
+    public function getPayableBillsTable($payableBills, bool $internalData = false): string
+    {
+        try {
+            $arrayToConvert = [];
+            foreach ($payableBills as $bill) {
+                $transactionAmount = $bill['transaction']['amount'] ?? "0.00";
+                $transactionAmountPaid = $bill['transaction']['amountPaid'] ?? "0.00";
+                $transactionAmountDiscount = $bill['transaction']['discountAmount'] ?? "0.00";
+                $amountMinusDiscount = bcsub($transactionAmount, $transactionAmountDiscount);
+
+                $billId = $bill['bill']['billID'] ?? null;
+
+                $fmt = new NumberFormatter( 'en_US', NumberFormatter::CURRENCY );
+                $amount = bcsub($amountMinusDiscount, $transactionAmountPaid);
+                $billToAdd = [
+                    "Rentvine Bill ID" => $billId,
+                    "Date bill" => $bill['bill']['billDate'],
+                    "Date due" => $bill['bill']['dateDue'],
+                    "Description" => $bill['transaction']['description'] ?? "N/A",
+                    "Amount Due" => $fmt->format($amount),
+                ];
+
+                if ($internalData) {
+                    $rentvineLink = str_replace("/api", "", $this->baseUrl);
+                    Logger::warning("Rentvine Link: " . $rentvineLink);
+                    $billLink = $billId ? "$rentvineLink/accounting/payables/bills/$billId" : null;
+                    Logger::warning("Rentvine Bill: " . $rentvineLink);
+                    $billToAdd["Vendor Name"] = $bill['contact']['name'] ?? "N/A";
+                    $billToAdd["Rentvine Bill Link"] = $billLink ?? "N/A";
+                    $billToAdd["Bill Ref"] = $bill['bill']['reference'] ?? "N/A";
+                    $billToAdd["Bill Ledger ID"] = $bill['ledger']['ledgerID'] ?? "N/A";
+                }
+
+                $arrayToConvert[] = $billToAdd;
+            }
+            $htmlContent = $this->arrayToHtmlTable($arrayToConvert);
+            Logger::warning('getPayableBills table: ' . $htmlContent);
+            return $htmlContent;
+        } catch (Throwable $e) {
+            Logger::warning('getPayableBillsTable error: ' . $e->getMessage());
+            return '';
         }
     }
 }

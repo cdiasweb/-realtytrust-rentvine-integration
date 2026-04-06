@@ -37,6 +37,16 @@ class AptlyAPI
     public const BILL_WH_TO_OWNER_RESULT = "Rentvine bill ID";
     public const BILL_WH_TO_OWNER_RESULT_FIELD = "BcPkGTN5kiyjcsSWg";
     public const CHANGES_FIELD = "changes";
+    public const BOARD_NAME_FIELD = "board_name";
+    public const BOARD_PORTFOLIO_FIELD_VALUE = "portfolios";
+    public const BOARD_PORTFOLIO_UPDATE_BILL_DUE_VALUE = "Update bills due list field from Propertyware report";
+    public const BOARD_PORTFOLIO_BILLS_DUE_UNPAID_KEY = "unpaidBills";
+    public const PORTFOLIO_APTLET_ID = "wwWcjSisveeQ3u4XB";
+    public const PORTFOLIO_BILL_DUE_ACTION_FIELD_KEY = "ME5SGPKykBNanSRnh";
+    public const PORTFOLIO_BILLS_DUE_TOTAL_KEY = "Bills due total";
+    public const PORTFOLIO_CLIENT_BILLS_LIST = "Bills due list client";
+    public const PORTFOLIO_INTERNAL_BILLS_LIST = "Bills due list internal";
+
 
 
     public const URL_TO_PDF_FIELD = 'tJmppg4PTEdAhRLat';

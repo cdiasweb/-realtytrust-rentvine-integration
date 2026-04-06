@@ -131,6 +131,16 @@ $routes = [
         '/getUnitFromPdf' => function () use ($rentvine) {
             $data = getJsonBody();
             echo $rentvine->getUnitsFromDriveFile($data);
+        },
+        '/find-payable-bills-by-portfolio' => function () use ($rentvine) {
+            header("Content-Type: application/json");
+            $data = getJsonBody() ?? [];
+            echo $rentvine->getPayableBillsFromPortfolio($data);
+        },
+        '/update-portfolio-unpaid-bill-data' => function () use ($rentvine) {
+            header("Content-Type: application/json");
+            $data = getJsonBody() ?? [];
+            echo $rentvine->updatePortfolioUnpaidBillsData($data);
         }
     ],
     'DELETE' => [
@@ -167,6 +177,11 @@ function getJsonBody()
 {
     // Get JSON data
     $rawData = file_get_contents('php://input');
+
+    if (!$rawData) {
+        return [];
+    }
+
     $data = json_decode($rawData, true);
 
     // Validate JSON

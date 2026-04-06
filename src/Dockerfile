@@ -4,15 +4,18 @@ FROM php:8.2-apache
 RUN apt-get update && apt-get install -y \
     unzip git curl \
     libmagickwand-dev \
+    libicu-dev \
     tesseract-ocr \
     imagemagick \
     ghostscript \
     fonts-dejavu-core fonts-liberation \
+    && docker-php-ext-install intl \
     && curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer \
     && pecl install redis \
     && docker-php-ext-enable redis \
     && pecl install imagick \
-    && docker-php-ext-enable imagick
+    && docker-php-ext-enable imagick \
+    && docker-php-ext-install bcmath
 
 # Copy custom ImageMagick policy file
 COPY ./policy.xml /etc/ImageMagick-6/policy.xml
