@@ -1266,9 +1266,12 @@ class RentvineAPI
             foreach ($headerMap as $label => $path) {
                 $value = $this->getValueByPath($row, $path, '');
 
-                // Array → JSON
-                if (is_array($value)) {
-                    $value = json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+                if (is_array($value) && $value["type"] === "link") {
+                    $link = "<a href='" . htmlspecialchars($value["value"]) . "'>" . htmlspecialchars($value['text']) . "</a>";
+                    $html .= '<td style="font-size:8px;"><pre style="margin:0;">'
+                        . $link .
+                        '</pre></td>';
+                    continue;
                 }
 
                 if (is_string($value) && str_starts_with($value, 'https')) {
@@ -1277,6 +1280,11 @@ class RentvineAPI
                         . $value .
                         '</pre></td>';
                     continue;
+                }
+
+                // Array → JSON
+                if (is_array($value)) {
+                    $value = json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
                 }
 
                 $html .= '<td style="font-size:8px;"><pre style="margin:0;">'
@@ -1338,7 +1346,11 @@ class RentvineAPI
                     $billToAdd["Vendor Name"] = $bill['contact']['name'] ?? "N/A";
                     $billToAdd["Rentvine Bill Link"] = $billLink ?? "N/A";
                     $billToAdd["Bill Ref"] = $bill['bill']['reference'] ?? "N/A";
-                    $billToAdd["Bill Ledger Link"] = $billLedgerLink;
+                    $billToAdd["Bill Ledger Link"] = [
+                        "type" => "link",
+                        "value" => $billLedgerLink,
+                        "text" => $bill['portfolio']['name'] ?? "N/A",
+                    ];
                 }
 
                 $arrayToConvert[] = $billToAdd;
