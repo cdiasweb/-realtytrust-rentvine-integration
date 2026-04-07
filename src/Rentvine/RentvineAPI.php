@@ -1211,11 +1211,11 @@ class RentvineAPI
         ];
 
         Logger::warning('RUN IT handleWhPostLeaseCharge ' . json_encode([
-                'leaseId' => $leaseId,
-                'chargeAccountId' => $payload['chargeAccountID'],
-                'amount' => $payload['amount'],
-                'datePosted' => $payload['datePosted']
-            ]));
+            'leaseId' => $leaseId,
+            'chargeAccountId' => $payload['chargeAccountID'],
+            'amount' => $payload['amount'],
+            'datePosted' => $payload['datePosted']
+        ]));
 
         try {
             $createChargeResult = $this->createLeaseCharge($leaseId, $payload);
@@ -1247,7 +1247,6 @@ class RentvineAPI
 
         // If no header map, fallback to original behavior
         if (empty($headerMap)) {
-            $headerMap = [];
             foreach (array_keys($data[0]) as $key) {
                 $headerMap[ucfirst($key)] = $key;
             }
@@ -1264,7 +1263,7 @@ class RentvineAPI
         foreach ($data as $row) {
             $html .= '<tr>';
 
-            foreach ($headerMap as $path) {
+            foreach ($headerMap as $label => $path) {
                 $value = $this->getValueByPath($row, $path, '');
 
                 // Array → JSON
@@ -1272,15 +1271,17 @@ class RentvineAPI
                     $value = json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
                 }
 
-                if (str_starts_with($value, 'https')) {
-                    $value = "<a href='$value'>Bill Link</a>";
+                if (is_string($value) && str_starts_with($value, 'https')) {
+                    $value = "<a href='" . htmlspecialchars($value) . "'>" . htmlspecialchars($label) . "</a>";
                     $html .= '<td style="font-size:8px;"><pre style="margin:0;">'
-                        . (string)$value .
+                        . $value .
                         '</pre></td>';
                     continue;
                 }
 
-                $html .= '<td style="font-size:8px;"><pre style="margin:0;">' . $value . '</pre></td>';
+                $html .= '<td style="font-size:8px;"><pre style="margin:0;">'
+                    . htmlspecialchars((string)$value) .
+                    '</pre></td>';
             }
 
             $html .= '</tr>';
@@ -1331,11 +1332,13 @@ class RentvineAPI
                     $rentvineLink = str_replace("/api", "", $this->baseUrl);
                     Logger::warning("Rentvine Link: " . $rentvineLink);
                     $billLink = $billId ? "$rentvineLink/accounting/payables/bills/$billId" : null;
+                    $porfolioId = $bill['portfolio']['portfolioID'] ?? null;
+                    $billLedgerLink = $porfolioId ? "https://realtytrustservicesllc.rentvine.com/portfolios/$porfolioId?page=1&tab=ledger" : "N/A";
                     Logger::warning("Rentvine Bill: " . $rentvineLink);
                     $billToAdd["Vendor Name"] = $bill['contact']['name'] ?? "N/A";
                     $billToAdd["Rentvine Bill Link"] = $billLink ?? "N/A";
                     $billToAdd["Bill Ref"] = $bill['bill']['reference'] ?? "N/A";
-                    $billToAdd["Bill Ledger ID"] = $bill['ledger']['ledgerID'] ?? "N/A";
+                    $billToAdd["Bill Ledger Link"] = $billLedgerLink;
                 }
 
                 $arrayToConvert[] = $billToAdd;
