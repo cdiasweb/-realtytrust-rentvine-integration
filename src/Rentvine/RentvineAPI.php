@@ -524,6 +524,13 @@ class RentvineAPI
 
             $clientHtml = $this->getPayableBillsTable($unpaidBillsData['payableBills'] ?? null);
             $internalHtml = $this->getPayableBillsTable($unpaidBillsData['payableBills'] ?? null, true);
+            $billLedgerLink = $portfolioId ? "https://realtytrustservicesllc.rentvine.com/portfolios/$portfolioId?page=1&tab=ledger" : "N/A";
+            $internalHtml = <<<HTML
+                <div>
+                    <a href="$billLedgerLink">Bill Ledger Link</a><br>
+                    $internalHtml
+                </div>
+            HTML;
 
             $amount = $unpaidBillsData['pendingBillAmount'] ?? "0.00";
             Logger::warning("BEFORE UPDATE CARD DATA: $boardName");
@@ -1333,24 +1340,24 @@ class RentvineAPI
                     "Date bill" => $bill['bill']['billDate'],
                     "Date due" => $bill['bill']['dateDue'],
                     "Description" => $bill['transaction']['description'] ?? "N/A",
-                    "Amount Due" => $fmt->format($amount),
+                    "Due" => $fmt->format($amount),
                 ];
 
                 if ($internalData) {
+                    unset($billToAdd['Due']);
                     $rentvineLink = str_replace("/api", "", $this->baseUrl);
-                    Logger::warning("Rentvine Link: " . $rentvineLink);
                     $billLink = $billId ? "$rentvineLink/accounting/payables/bills/$billId" : null;
-                    $porfolioId = $bill['portfolio']['portfolioID'] ?? null;
-                    $billLedgerLink = $porfolioId ? "https://realtytrustservicesllc.rentvine.com/portfolios/$porfolioId?page=1&tab=ledger" : "N/A";
-                    Logger::warning("Rentvine Bill: " . $rentvineLink);
-                    $billToAdd["Vendor Name"] = $bill['contact']['name'] ?? "N/A";
-                    $billToAdd["Rentvine Bill Link"] = $billLink ?? "N/A";
-                    $billToAdd["Bill Ref"] = $bill['bill']['reference'] ?? "N/A";
-                    $billToAdd["Bill Ledger Link"] = [
+                    $billToAdd["Rentvine Bill ID"] = [
                         "type" => "link",
-                        "value" => $billLedgerLink,
-                        "text" => $bill['portfolio']['name'] ?? "N/A",
+                        "value" => $billLink,
+                        "text" => $billId
                     ];
+                    $billToAdd["Vendor Name"] = $bill['contact']['name'] ?? "N/A";
+                    $billToAdd["Bill Ref"] = $bill['bill']['reference'] ?? "N/A";
+                    $billToAdd["Amount"] = $bill['transaction']['amount'] ?? "N/A";
+                    $billToAdd["Paid"] = $bill['transaction']['amountPaid'] ?? "N/A";
+                    $billToAdd["Due"] = $fmt->format($amount);
+                    Logger::warning("Bill data: " . json_encode($billToAdd, JSON_PRETTY_PRINT));
                 }
 
                 $arrayToConvert[] = $billToAdd;
