@@ -43,6 +43,10 @@ class AptlyAPI
     public const BOARD_PORTFOLIO_BILLS_DUE_UNPAID_KEY = "unpaidBills";
     public const PORTFOLIO_APTLET_ID = "wwWcjSisveeQ3u4XB";
     public const PORTFOLIO_BILL_DUE_ACTION_FIELD_KEY = "ME5SGPKykBNanSRnh";
+    public const PORTFOLIO_BILL_DUE_ACTION_FIELD_LABEL = "Bills due update from PM software report action checkbox";
+    public const PORTFOLIO_BILL_DUE_ACTION_LAST_UPDATED_FIELD_LABEL = "Bills due action last updated date time";
+
+
     public const PORTFOLIO_BILLS_DUE_TOTAL_KEY = "Bills due total";
     public const PORTFOLIO_CLIENT_BILLS_LIST = "Bills due list client";
     public const PORTFOLIO_INTERNAL_BILLS_LIST = "Bills due list internal";

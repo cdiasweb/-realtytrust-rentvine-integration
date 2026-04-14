@@ -4,6 +4,8 @@ namespace Rentvine;
 
 use Aptly\AptlyAPI;
 use CURLFile;
+use DateTime;
+use DateTimeZone;
 use Exception;
 use Imagick;
 use lib\openAIClient;
@@ -491,7 +493,6 @@ class RentvineAPI
             $this->handleWhPostOwnerBillToPortfolio($data);
             $this->handleWhPostLeaseCharge($data);
         }
-
         $this->handleBillDueInfo($data);
 
         // Forward events
@@ -532,16 +533,26 @@ class RentvineAPI
                 </div>
             HTML;
 
+            if (!$portfolioId) {
+                $clientHtml = $internalHtml = <<<HTML
+                    <span style="color: red">There is no Rentvine ID set in this card.</span>
+                HTML;
+            }
+
             $amount = $unpaidBillsData['pendingBillAmount'] ?? "0.00";
             Logger::warning("BEFORE UPDATE CARD DATA: $boardName");
             Logger::warning("Amount to update: " . $amount);
             Logger::warning("ID: " . $eventObject->data['_id'] ?? null);
 
             try {
+                $dt = new DateTime("now", new DateTimeZone("UTC"));
+
                 $updateResult = $aptly->updateCardData($eventObject->data['_id'] ?? null, [
                     AptlyAPI::PORTFOLIO_BILLS_DUE_TOTAL_KEY => $amount,
                     AptlyAPI::PORTFOLIO_CLIENT_BILLS_LIST => $clientHtml,
                     AptlyAPI::PORTFOLIO_INTERNAL_BILLS_LIST => $internalHtml,
+                    AptlyAPI::PORTFOLIO_BILL_DUE_ACTION_FIELD_LABEL => false,
+                    AptlyAPI::PORTFOLIO_BILL_DUE_ACTION_LAST_UPDATED_FIELD_LABEL => $dt->format("Y-m-d\TH:i:s.v\Z"),
                 ], AptlyAPI::PORTFOLIO_APTLET_ID);
                 Logger::warning("UPDATE RESULT: " . json_encode($updateResult));
             } catch (Throwable $e) {
