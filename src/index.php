@@ -6,12 +6,13 @@ require_once './vendor/autoload.php';
 
 use Aptly\AptlyAPI;
 use Rentvine\RentvineAPI;
+use Util\Env;
 
 $requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $requestMethod = $_SERVER['REQUEST_METHOD'];
 
-$userName = '221a34acd58d40138ddfbf9ba18ce2cf';
-$password = '64024e6e27a940358794c7c413887aae';
+$userName = Env::getRentvineApiUsername();
+$password = Env::getRentvineApiPassword();
 $rentvine = new RentvineAPI($userName, $password);
 $aptly = new AptlyAPI();
 

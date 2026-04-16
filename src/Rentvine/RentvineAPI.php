@@ -8,6 +8,7 @@ use DateTime;
 use DateTimeZone;
 use Exception;
 use Imagick;
+use Jobs\UpdateBillDueJob;
 use lib\openAIClient;
 use NumberFormatter;
 use Throwable;
@@ -479,32 +480,45 @@ class RentvineAPI
 
     public function handleWebhook($data)
     {
-        $webhookEventInfo = 'Webhook Received: ' . json_encode($data);
-        $isProd = Env::isProd();
+        try {
 
-        // Handle events
-        if ($isProd) {
-            $this->handleBuildingAttachment($data);
-            $this->handleLeaseAttachment($data);
-            $this->handlePostOwnerBillToPortfolio($data);
-            $this->handleGetUnitFromDescription($data);
-            $this->handleGetUnitFromPDF($data);
-            $this->handleGetVendor($data);
-            $this->handleWhPostOwnerBillToPortfolio($data);
-            $this->handleWhPostLeaseCharge($data);
+            $webhookEventInfo = 'Webhook Received: ' . json_encode($data);
+            Logger::warning($webhookEventInfo);
+            $isProd = Env::isProd();
+
+            // Handle events
+            if ($isProd) {
+                try {
+                    $this->handleBuildingAttachment($data);
+                    $this->handleLeaseAttachment($data);
+                    $this->handlePostOwnerBillToPortfolio($data);
+                    $this->handleGetUnitFromDescription($data);
+                    $this->handleGetUnitFromPDF($data);
+                    $this->handleGetVendor($data);
+                    $this->handleWhPostOwnerBillToPortfolio($data);
+                    $this->handleWhPostLeaseCharge($data);
+                } catch (\Throwable $e) {
+                    Logger::warning("handleWebhook prod handler error: " . $e->getMessage());
+                }
+            }
+
+            UpdateBillDueJob::dispatch($data);
+
+            // Forward events
+            $this->forwardWebhookEvent($data, self::MAKE_URL);
+            $this->forwardWebhookEvent($data, self::N8N_URL);
+
+            // Forward to NGROK only if prod env
+            if ($isProd) {
+                $this->forwardWebhookEvent($data, self::NGROK_URL);
+            }
+
+            return $webhookEventInfo;
+
+        } catch (\Throwable $th) {
+            Logger::warning("Error handling webhook: " . $th->getMessage());
+            return "";
         }
-        $this->handleBillDueInfo($data);
-
-        // Forward events
-        $this->forwardWebhookEvent($data, self::MAKE_URL);
-        $this->forwardWebhookEvent($data, self::N8N_URL);
-
-        // Forward to NGROK only if prod env
-        if ($isProd) {
-            $this->forwardWebhookEvent($data, self::NGROK_URL);
-        }
-
-        return $webhookEventInfo;
     }
 
     public function handleBillDueInfo($data)

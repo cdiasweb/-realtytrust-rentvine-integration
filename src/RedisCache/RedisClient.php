@@ -11,7 +11,7 @@ class RedisClient
     public function __construct()
     {
         $this->redis = new \Redis();
-        $this->redis->connect('redis', Env::getRedisPort() ?? 6378);
+        $this->redis->connect(Env::getRedisHost() ?: 'redis', (int)(Env::getRedisPort() ?: 6379));
     }
     public function __call($name, $arguments)
     {

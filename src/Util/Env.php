@@ -12,8 +12,12 @@ class Env
     private static function setup(): void
     {
         if (!self::$loaded) {
-            $dotenv = Dotenv::createImmutable(__DIR__ . "../../");
-            $dotenv->load();
+            try {
+                $dotenv = Dotenv::createImmutable(dirname(__DIR__));
+                $dotenv->load();
+            } catch (\Throwable $e) {
+                // .env not found or unreadable — fall back to system env vars
+            }
             self::$loaded = true;
         }
     }
@@ -46,5 +50,21 @@ class Env
     {
         self::setup();
         return $_ENV['REDIS_PORT'] ?? '';
+    }
+
+    public static function getRedisHost(): string
+    {
+        self::setup();
+        return $_ENV['REDIS_HOST'] ?? '';
+    }
+
+    public static function getRentvineApiUsername(): string {
+        self::setup();
+        return $_ENV['RENTVINE_API_USERNAME'] ?? '';
+    }
+
+    public static function getRentvineApiPassword(): string {
+        self::setup();
+        return $_ENV['RENTVINE_API_PASSWORD'] ?? '';
     }
 }

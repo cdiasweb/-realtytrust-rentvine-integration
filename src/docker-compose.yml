@@ -1,3 +1,5 @@
+version: '3.9'
+
 services:
   php:
     build:
@@ -9,8 +11,26 @@ services:
     volumes:
       - ./:/var/www/html
     working_dir: /var/www/html
-    command: /bin/sh -c "composer install --no-interaction --prefer-dist --optimize-autoloader && composer update --no-interaction && apache2-foreground"
+    command: apache2-foreground
     restart: always
+    networks:
+      - app-network
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: php-worker
+    volumes:
+      - ./:/var/www/html
+    working_dir: /var/www/html
+    command: php scripts/worker.php
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: always
+    networks:
+      - app-network
 
   redis:
     image: redis:7
@@ -20,3 +40,14 @@ services:
     volumes:
       - ./redis-data:/data
     restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge

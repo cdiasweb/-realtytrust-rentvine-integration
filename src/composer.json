@@ -9,6 +9,9 @@
             "Util\\": "Util",
             "Aptly\\": "Aptly",
             "RedisCache\\": "RedisCache",
+            "Queue\\": "Queue",
+            "Jobs\\": "Jobs",
+            "scripts\\": "scripts",
             "lib\\": "lib"
         }
     },
@@ -25,7 +28,8 @@
         "openai-php/client": "^0.13.0",
         "symfony/http-client": "^7.3",
         "nyholm/psr7": "^1.8",
-        "guzzlehttp/guzzle": "^7.9"
+        "guzzlehttp/guzzle": "^7.9",
+        "predis/predis": "^3.4"
     },
     "config": {
         "allow-plugins": {
