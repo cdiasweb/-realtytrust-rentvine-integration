@@ -67,4 +67,14 @@ class Env
         self::setup();
         return $_ENV['RENTVINE_API_PASSWORD'] ?? '';
     }
+
+    public static function getAutoDBApiUrl(): string {
+        self::setup();
+        return $_ENV['AUTODB_API_URL'] ?? '';
+    }
+
+    public static function getAutoDBApiToken(): string {
+        self::setup();
+        return $_ENV['AUTODB_API_TOKEN'] ?? '';
+    }
 }

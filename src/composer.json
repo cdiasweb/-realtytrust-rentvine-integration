@@ -5,6 +5,7 @@
     "license": "MIT",
     "autoload": {
         "psr-4": {
+            "Autodb\\": "Autodb",
             "Rentvine\\": "Rentvine",
             "Util\\": "Util",
             "Aptly\\": "Aptly",

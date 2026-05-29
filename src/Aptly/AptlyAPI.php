@@ -3,6 +3,7 @@
 namespace Aptly;
 
 use Rentvine\Logger;
+use Throwable;
 
 class AptlyAPI
 {
@@ -27,6 +28,7 @@ class AptlyAPI
     public const ATTACH_TO_RV_LEASE_RESULT = 'Attach to rv lease result';
     public const POST_TO_OWNER_PORTFOLIO_FIELD = 'XQD5fixHSnDEs5Nrj';
     public const ADD_AS_BILL_KEY = 'yty248gxyP46xW3Mf';
+    public const BATCH_BILLS_KEY = 'Hvu7eB2aXuuxDshgh';
     public const POST_TO_OWNER_PORTFOLIO_VALUE = 'Post to owner portfolio';
     public const OWNER_PORTFOLIO_BILL_AMOUNT_FIELD = '5a7PBd2u6aEvrgYxi';
     public const OWNER_PORTFOLIO_BILL_DESCRIPTION_FIELD = 'k5Mj5r7nHiCjRGav7';
@@ -61,6 +63,7 @@ class AptlyAPI
 
     public function makeAptlyApiRequest($endpoint = '', $method = 'GET', $data = [], $useApiSubdomain = false, $pathParameters = '') {
         $url = ($useApiSubdomain ? $this->apiBaseUrl : $this->baseUrl) . $endpoint . "?x-token=" . $this->token . "&$pathParameters";
+        Logger::warning("APTLY API URL: " . $url);
         $httpHeaders = $headers ?? [
             'Content-Type: application/json'
         ];
@@ -126,7 +129,39 @@ class AptlyAPI
             return null;
         }
 
-        return $this->makeAptlyApiRequest("/api/card/$cardId", "GET", []);
+        return $this->makeAptlyApiRequest("/api/card/$cardId");
+    }
+
+    public function getCards($boardId)
+    {
+        try {
+            Logger::warning("GET CARDS A");
+            if (!$boardId) {
+                return null;
+            }
+
+            Logger::warning("GET CARDS B");
+
+            $result = [];
+            $totalPages = 500;
+            for ($page = 1; $page <= $totalPages; $page++) {
+                Logger::warning("GET CARDS C");
+                $response = $this->makeAptlyApiRequest("/api/aptlet/$boardId", "GET", [], false, "page=$page");
+                $response = json_decode($response, true);
+                Logger::warning("GET CARDS D");
+                $data = $response['data'];
+                if ($data) {
+                    Logger::warning("CARD RESULT: " . json_encode($data));
+                    $result = array_merge($result, $data);
+                } else {
+                    break;
+                }
+            }
+
+            return $result;
+        } catch (Throwable $t) {
+            Logger::warning("Error: " . $t->getMessage());
+        }
     }
 
     public function getWorkOrderFromNumber($workOrderNumber)

@@ -3,6 +3,7 @@
 namespace Rentvine;
 
 use Aptly\AptlyAPI;
+use Autodb\AutoDBApi;
 use CURLFile;
 use DateTime;
 use DateTimeZone;
@@ -481,9 +482,7 @@ class RentvineAPI
     public function handleWebhook($data)
     {
         try {
-
             $webhookEventInfo = 'Webhook Received: ' . json_encode($data);
-            Logger::warning($webhookEventInfo);
             $isProd = Env::isProd();
 
             // Handle events
@@ -497,12 +496,12 @@ class RentvineAPI
                     $this->handleGetVendor($data);
                     $this->handleWhPostOwnerBillToPortfolio($data);
                     $this->handleWhPostLeaseCharge($data);
+                    UpdateBillDueJob::dispatch($data);
+                    $this->handleBatchBill($data);
                 } catch (\Throwable $e) {
                     Logger::warning("handleWebhook prod handler error: " . $e->getMessage());
                 }
             }
-
-            UpdateBillDueJob::dispatch($data);
 
             // Forward events
             $this->forwardWebhookEvent($data, self::MAKE_URL);
@@ -516,7 +515,7 @@ class RentvineAPI
             return $webhookEventInfo;
 
         } catch (\Throwable $th) {
-            Logger::warning("Error handling webhook: " . $th->getMessage());
+            //Logger::warning("Error handling webhook: " . $th->getMessage());
             return "";
         }
     }
@@ -818,6 +817,129 @@ class RentvineAPI
 
             $this->createOwnerPortfolioBill($data, $eventObject);
         }
+    }
+
+    public function handleBatchBill($event)
+    {
+        try {
+            $eventObject = (object)$event;
+            $postOwnerBillAction = $eventObject->data[AptlyAPI::BATCH_BILLS_KEY] ?? null;
+            $cardId = $eventObject->data['_id'] ?? null;
+
+            if ($eventObject->action === "update" && $postOwnerBillAction) {
+                Logger::warning("HANDLE BATCH BILL...");
+                $query = [
+                    "collectionName" => "expenses",
+                    "queryData" => [
+                        "expression" => [
+                            "Batch parent link._id" => "csAQkpyLZQ74NSdWu"
+                        ],
+                    ]
+                ];
+                $response = AutoDBApi::runRawQuery($query);
+                Logger::warning("Linked cards found " . $response);
+                $result = json_decode($response, true);
+                $csv = "vendor,amount";
+                $billsTable = <<<HTML
+                    <table style="
+                        width: 100%;
+                        border-collapse: collapse;
+                        font-family: Arial, sans-serif;
+                        font-size: 14px;
+                        margin-top: 16px;
+                        border: 1px solid #d1d5db;
+                        border-radius: 8px;
+                        overflow: hidden;
+                    ">
+                        <thead>
+                            <tr style="background-color: #f3f4f6; color: #111827;">
+                                <th style="
+                                    padding: 12px;
+                                    border: 1px solid #d1d5db;
+                                    text-align: left;
+                                ">
+                                    Payee
+                                </th>
+                                <th style="
+                                    padding: 12px;
+                                    border: 1px solid #d1d5db;
+                                    text-align: left;
+                                ">
+                                    Date
+                                </th>
+                                <th style="
+                                    padding: 12px;
+                                    border: 1px solid #d1d5db;
+                                    text-align: right;
+                                ">
+                                    Amount
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                HTML;
+
+                foreach ($result['data'] as $card) {
+                    $payee = htmlspecialchars($card['Payee name - Vendors Title Mirror Field'] ?? '');
+                    $date = htmlspecialchars($card['Purchase Date'] ?? '');
+                    $date = date("Y-m-d", strtotime($date));
+
+                    $formatter = new NumberFormatter('en_US', NumberFormatter::CURRENCY);
+
+                    $rawAmount = $card['Line Amount']['amount'] ?? 0;
+                    $amount = $formatter->formatCurrency(
+                        $rawAmount,
+                        'USD'
+                    );
+
+                    $csv .= "\n$payee, $rawAmount";
+
+                    $billsTable .= <<<HTML
+                        <tr style="background-color: #ffffff;">
+                            <td style="
+                                padding: 10px 12px;
+                                border: 1px solid #e5e7eb;
+                            ">
+                                $payee
+                            </td>
+                            <td style="
+                                padding: 10px 12px;
+                                border: 1px solid #e5e7eb;
+                            ">
+                                $date
+                            </td>
+                            <td style="
+                                padding: 10px 12px;
+                                border: 1px solid #e5e7eb;
+                                text-align: right;
+                                font-weight: 600;
+                            ">
+                                $amount
+                            </td>
+                        </tr>
+                    HTML;
+                }
+
+                $billsTable .= <<<HTML
+                        </tbody>
+                    </table>
+                HTML;
+
+                $aptly = new AptlyAPI();
+                $aptly->updateCardData($cardId, [
+                    "Batch summary" => $billsTable,
+                    "Batch update checkbox" => false,
+                    "Batch CSV" => $csv
+                ], "fkBeA9QhaK3z3Bea2");
+
+            } else {
+                Logger::warning("NOT BATCH BILL EVENT...");
+            }
+        } catch (Throwable $e) {
+            Logger::warning("Error handling batch bill: " . $e->getMessage());
+            Logger::warning("Error handling batch bill: " . $e->getTraceAsString());
+        }
+
     }
 
     public function shareFile($fileAttachmentId, $isSharedWithTenant = false, $isSharedWithOwner = false, $sendNotification = false)
