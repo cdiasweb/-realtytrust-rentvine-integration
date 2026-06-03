@@ -77,4 +77,24 @@ class Env
         self::setup();
         return $_ENV['AUTODB_API_TOKEN'] ?? '';
     }
+
+    public static function getAppEmailUsername(): string {
+        self::setup();
+        return $_ENV['GMAIL_APP_EMAIL_USER'] ?? '';
+    }
+
+    public static function getAppEmailFrom(): string {
+        self::setup();
+        return $_ENV['GMAIL_APP_EMAIL_FROM'] ?? '';
+    }
+
+    public static function getAppEmailPassword(): string {
+        self::setup();
+        return $_ENV['GMAIL_APP_PASSWORD'] ?? '';
+    }
+
+    public static function getBatchBillsNotificationEmail(): string {
+        self::setup();
+        return $_ENV['BILLS_NOTIFICATION_EMAIL'] ?? '';
+    }
 }

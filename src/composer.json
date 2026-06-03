@@ -30,7 +30,8 @@
         "symfony/http-client": "^7.3",
         "nyholm/psr7": "^1.8",
         "guzzlehttp/guzzle": "^7.9",
-        "predis/predis": "^3.4"
+        "predis/predis": "^3.4",
+        "phpmailer/phpmailer": "^7.1"
     },
     "config": {
         "allow-plugins": {

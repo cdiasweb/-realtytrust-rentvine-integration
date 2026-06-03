@@ -29,6 +29,9 @@ class AptlyAPI
     public const POST_TO_OWNER_PORTFOLIO_FIELD = 'XQD5fixHSnDEs5Nrj';
     public const ADD_AS_BILL_KEY = 'yty248gxyP46xW3Mf';
     public const BATCH_BILLS_KEY = 'Hvu7eB2aXuuxDshgh';
+    public const BATCH_BILLS_NOTIFY_KEY = 'b7cgYiW7M9CQTHQTA';
+    public const BATCH_BILLS_CSV_FIELD = 'EqZWMCusaaK9aDPSn';
+    public const PAYMENTS_EXPENSES_APTLY_ID = 'fkBeA9QhaK3z3Bea2';
     public const POST_TO_OWNER_PORTFOLIO_VALUE = 'Post to owner portfolio';
     public const OWNER_PORTFOLIO_BILL_AMOUNT_FIELD = '5a7PBd2u6aEvrgYxi';
     public const OWNER_PORTFOLIO_BILL_DESCRIPTION_FIELD = 'k5Mj5r7nHiCjRGav7';

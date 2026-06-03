@@ -13,6 +13,7 @@ use Jobs\UpdateBillDueJob;
 use lib\openAIClient;
 use NumberFormatter;
 use Throwable;
+use Util\Email;
 use Util\Env;
 
 class RentvineAPI
@@ -498,6 +499,7 @@ class RentvineAPI
                     $this->handleWhPostLeaseCharge($data);
                     UpdateBillDueJob::dispatch($data);
                     $this->handleBatchBill($data);
+                    $this->handleNotifyBatchBill($data);
                 } catch (\Throwable $e) {
                     Logger::warning("handleWebhook prod handler error: " . $e->getMessage());
                 }
@@ -940,6 +942,42 @@ class RentvineAPI
             Logger::warning("Error handling batch bill: " . $e->getTraceAsString());
         }
 
+    }
+
+    public function handleNotifyBatchBill($event)
+    {
+        try {
+
+            $eventObject = (object)$event;
+            $postOwnerBillAction = $eventObject->data[AptlyAPI::BATCH_BILLS_NOTIFY_KEY] ?? null;
+
+            if ($eventObject->action === "update" && $postOwnerBillAction) {
+                $csv = $eventObject->data[AptlyAPI::BATCH_BILLS_CSV_FIELD] ?? "";
+                if (!$csv) {
+                    Logger::warning("No csv data to send for batch bill email notification.");
+                    return;
+                }
+                $emailTo = Env::getBatchBillsNotificationEmail();
+                if (!$emailTo) {
+                    Logger::warning("No email to send for batch bill email notification.");
+                }
+                $mail = new Email();
+                $csv = str_replace(["\r\n", "\n", "\r"], "<br>", $csv);
+                Logger::warning("BATCH BILL CSV: " . $csv);
+                $mail->send(Env::getBatchBillsNotificationEmail(), "Batch Bills CSV Data", "Batch bill CSV Data: <br> $csv");
+
+                $aptly = new AptlyAPI();
+                $cardId = $eventObject->data['_id'] ?? null;
+                $aptly->updateCardData($cardId, [
+                    "Batch payment request checkbox" => false,
+                    "Batch confirmed sent checkbox" => true,
+                ], AptlyAPI::PAYMENTS_EXPENSES_APTLY_ID);
+
+            }
+
+        } catch (Throwable $e) {
+            Logger::warning("Error handling notify batch bill: " . $e->getMessage());
+        }
     }
 
     public function shareFile($fileAttachmentId, $isSharedWithTenant = false, $isSharedWithOwner = false, $sendNotification = false)
